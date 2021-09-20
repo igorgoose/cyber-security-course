@@ -43,10 +43,6 @@ test_kw_lengths = [3, 4, 5, 6]
 l_gram_lengths = [3, 4, 5, 6]
 keywords = ["fat", "word", "seven", "cotton"]
 
-f = open("old/src_200_4.txt", "r")
-source_text = str(f.read())
-
-
 def remove_not_allowed_chars(text: str, alphabet: list):
     text = text.lower()
     text = re.sub(r'[\n\t\-,.]', ' ', text)
