@@ -2,10 +2,9 @@ import math
 import re
 import os
 import pprint
-import json
 import numpy as np
-from os import listdir, makedirs
-from os.path import isfile, join
+import json
+import matplotlib.pyplot as plt
 
 english_alphabet_to_frequency = {
     'a': .08167,
@@ -42,6 +41,7 @@ test_text_lengths = [500, 1000, 2000]
 test_kw_lengths = [3, 4, 5, 6]
 l_gram_lengths = [3, 4, 5, 6]
 keywords = ["fat", "word", "seven", "cotton"]
+
 
 def remove_not_allowed_chars(text: str, alphabet: list):
     text = text.lower()
@@ -177,7 +177,6 @@ for text_length in test_text_lengths:
             for stage in stages:
                 stats[text_length][kw][i][stage] = 0
 
-
 # decryption
 for length in test_text_lengths:
     for keyword in keywords:
@@ -187,7 +186,7 @@ for length in test_text_lengths:
                 encrypted_text = str(enc_file.read())
                 print("Encrypted text:")
                 print(encrypted_text)
-                for l in range(3, 8):
+                for l in range(3, 9):
                     print("Testing with l-grams of lenfth " + str(l))
                     print("____________________________________________")
                     distances = find_distances_between_l_grams(encrypted_text, l)
@@ -215,11 +214,65 @@ for length in test_text_lengths:
                     decrypted_text = decrypt_vigener(encrypted_text, shifts, english_alphabet)
                     print("Decrypted text:")
                     print(decrypted_text)
-                    with open("decrypted/decr_" + str(length) + "_" + str(test_no) + "_" + keyword + ".txt",
-                              "w") as decr_file:
+                    with open("decrypted/decr_" + str(length) + "_" + str(test_no) + "_" + keyword + "_l-" + str(l) +
+                              ".txt", "w") as decr_file:
                         decr_file.write(decrypted_text)
 
 print(json.dumps(stats, sort_keys=False, indent=4))
+
+
+def build_text_len_coordinates(_stats: dict, l):
+    coords = []
+    for text_length in test_text_lengths:
+        y = 0
+        for keyword in keywords:
+            y += _stats[text_length][keyword][l]["decryption"]
+        y /= len(keywords)
+        coords.append(y)
+    return coords
+
+
+def build_keyword_len_coords(_stats: dict, l):
+    kw_stats = {}
+    for keyword in keywords:
+        kw_stats[keyword] = 0
+
+    for text_length in test_text_lengths:
+        for keyword in keywords:
+            kw_stats[keyword] += _stats[text_length][keyword][l]["decryption"]
+
+    coords = []
+    for value in kw_stats.values():
+        coords.append(value / len(test_text_lengths))
+    return coords
+
+
+# for l in range(3, 9):
+#     x = test_text_lengths
+#     y = build_text_len_coordinates(stats, l)
+#
+#     plt.suptitle('L-gram len: ' + str(l), fontsize=20)
+#     plt.plot(x, y, 'ro')
+#     plt.xlabel('Text length', fontsize=12)
+#     plt.ylabel('% of success', fontsize=12)
+#     # plt.xticks(np.arange(min(text_length), max(text_length) + 200, 200))
+#     # plt.yticks(np.arange(0.0, 1.1, 0.1))
+#     plt.axis([0, test_text_lengths[2] + 100, -0.1, 1.1])
+#     plt.show()
+
+
+for l in range(3, 9):
+    x = [len(keyword) for keyword in keywords]
+    y = build_keyword_len_coords(stats, l)
+
+    plt.suptitle('L-gram len: ' + str(l), fontsize=20)
+    plt.plot(x, y, 'ro')
+    plt.xlabel('Keyword length', fontsize=12)
+    plt.ylabel('% of success', fontsize=12)
+    # plt.xticks(np.arange(min(text_length), max(text_length) + 200, 200))
+    # plt.yticks(np.arange(0.0, 1.1, 0.1))
+    plt.axis([x[0] - 1, x[len(x) - 1] + 1, -0.1, 1.1])
+    plt.show()
 # pprint.pprint(stats)
 
 # source_text = remove_not_allowed_chars(source_text, english_alphabet)
