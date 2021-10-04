@@ -1,0 +1,1 @@
+alter table client add column disabled bool not null default false;

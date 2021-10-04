@@ -21,6 +21,7 @@ public class Client {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
     private String session;
+    private Boolean disabled;
     private LocalDateTime sessionExpiresAt;
 
 }

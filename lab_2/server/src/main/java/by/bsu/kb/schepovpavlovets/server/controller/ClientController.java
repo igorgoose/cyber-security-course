@@ -6,15 +6,19 @@ import by.bsu.kb.schepovpavlovets.server.model.dto.SessionUpdateRequestDto;
 import by.bsu.kb.schepovpavlovets.server.model.dto.SignUpResponseDto;
 import by.bsu.kb.schepovpavlovets.server.service.SessionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
-@RestController("/client")
+@RestController
+@RequestMapping("/client")
 public class ClientController {
 
     private final SessionService sessionService;
+
+    @GetMapping
+    public String ok() {
+        return "ok";
+    }
 
     @PostMapping ("/signUp")
     public SignUpResponseDto signUpClient(@RequestBody ClientPublicKeyDto clientPublicKeyDto) {
@@ -23,6 +27,11 @@ public class ClientController {
 
     @PostMapping ("/session")
     public SessionKeyDto generateSession(@RequestBody SessionUpdateRequestDto sessionUpdateRequestDto) {
+        return sessionService.generateSessionKeyWithClientId(sessionUpdateRequestDto.getEncodedClientId());
+    }
+
+    @PostMapping ("/session/invalidate")
+    public SessionKeyDto invalidateSession(@RequestBody SessionUpdateRequestDto sessionUpdateRequestDto) {
         return sessionService.generateSessionKeyWithClientId(sessionUpdateRequestDto.getEncodedClientId());
     }
 }

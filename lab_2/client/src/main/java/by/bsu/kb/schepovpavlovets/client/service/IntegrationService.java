@@ -1,10 +1,16 @@
 package by.bsu.kb.schepovpavlovets.client.service;
 
+import by.bsu.kb.schepovpavlovets.client.model.entity.ServerData;
 import lombok.SneakyThrows;
 
 public interface IntegrationService {
-    void signUpForServer();
+    ServerData signUpForServer();
 
     @SneakyThrows
-    void getNewSession();
+    ServerData getNewSession();
+
+    @SneakyThrows
+    ServerData invalidateSession();
+
+    String getConnectionStatus();
 }

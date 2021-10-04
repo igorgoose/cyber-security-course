@@ -1,0 +1,1 @@
+alter table server_data add column status varchar(30) not null;

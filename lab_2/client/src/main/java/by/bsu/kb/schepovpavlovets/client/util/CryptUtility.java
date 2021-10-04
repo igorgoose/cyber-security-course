@@ -113,5 +113,4 @@ public class CryptUtility {
     public byte[] getPublicKeyEncoded() {
         return publicKey != null ? publicKey.getEncoded() : null;
     }
-
 }

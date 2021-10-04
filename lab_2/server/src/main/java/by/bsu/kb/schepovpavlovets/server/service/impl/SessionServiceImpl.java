@@ -34,6 +34,7 @@ public class SessionServiceImpl implements SessionService {
         String session = Base64.encodeBase64String(sessionBytes);
         client.setSession(session);
         client.setSessionExpiresAt(sessionExpiresAt);
+        client.setDisabled(false);
         clientRepository.save(client);
         byte[] publicKeyBytes = Base64.decodeBase64(publicKey);
         cryptUtility.saveClientPublicKey(publicKeyBytes, client.getId().toString());
@@ -58,6 +59,15 @@ public class SessionServiceImpl implements SessionService {
         return SessionKeyDto.builder()
                             .sessionKey(cryptUtility.encodeStringBase64RSA(client.getId().toString(), client.getId().toString()))
                             .build();
+    }
+
+    @Transactional
+    @Override
+    public void invalidateSession(String encodedClientId) {
+        String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientId));
+        Client client = clientRepository.findById(UUID.fromString(clientId)).orElseThrow(() -> new UnauthorizedException(INVALID_CLIENT_ID.name()));
+        client.setDisabled(true);
+        clientRepository.save(client);
     }
 
 }

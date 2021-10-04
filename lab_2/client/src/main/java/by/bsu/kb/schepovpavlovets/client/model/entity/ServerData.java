@@ -18,5 +18,10 @@ public class ServerData {
     private Integer id;
     private String clientId;
     private String session;
+    private String status;
     private LocalDateTime updatedOn = LocalDateTime.now();
+
+    public enum ConnectionStatus {
+        NO_SERVER, DISCONNECTED, CONNECTED
+    }
 }
