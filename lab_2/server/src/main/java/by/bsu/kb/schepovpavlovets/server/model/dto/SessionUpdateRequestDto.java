@@ -5,6 +5,6 @@ import lombok.Data;
 
 @Builder
 @Data
-public class SessionKeyDto {
-    private String sessionKey;
+public class SessionUpdateRequestDto {
+    private String encodedClientId;
 }

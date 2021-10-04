@@ -1,5 +1,10 @@
 package by.bsu.kb.schepovpavlovets.client.service;
 
+import lombok.SneakyThrows;
+
 public interface IntegrationService {
-    void updateSessionKey();
+    void signUpForServer();
+
+    @SneakyThrows
+    void getNewSession();
 }

@@ -21,10 +21,13 @@ public class CryptUtility {
     private String privateKeyPath;
     @Value("${content.key.public.path}")
     private String publicKeyPath;
+    @Value("${content.key.server.public.path}")
+    private String serverPublicKeyPath;
     @Value("${content.env-var}")
     private String contentEnvVar;
     private PrivateKey privateKey;
     private PublicKey publicKey;
+    private PublicKey serverPublicKey = null;
 
     @SneakyThrows
     @PostConstruct
@@ -45,27 +48,50 @@ public class CryptUtility {
     }
 
     @SneakyThrows
-    public String decodeBytesToString(byte[] encodedBytes) {
-        return new String(decodeBytes(encodedBytes), StandardCharsets.UTF_8);
+    public void saveServerPublicKey(byte[] publicKeyBytes) {
+        String contentPath = System.getenv(contentEnvVar);
+        try (FileOutputStream fos = new FileOutputStream((contentPath + serverPublicKeyPath))) {
+            fos.write(publicKeyBytes);
+        }
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
+        serverPublicKey = keyFactory.generatePublic(publicKeySpec);
     }
 
     @SneakyThrows
-    public byte[] decodeBytes(byte[] encodedBytes) {
+    public String decodeBytesToStringRSA(byte[] encodedBytes) {
+        return new String(decodeBytesRSA(encodedBytes), StandardCharsets.UTF_8);
+    }
+
+    @SneakyThrows
+    public byte[] decodeBytesRSA(byte[] encodedBytes) {
         Cipher decryptCipher = Cipher.getInstance("RSA");
         decryptCipher.init(Cipher.DECRYPT_MODE, privateKey);
         return decryptCipher.doFinal(encodedBytes);
     }
 
     @SneakyThrows
-    public byte[] encodeBytes(byte[] toEncode) {
+    public byte[] encodeBytesRSA(byte[] toEncode) {
         Cipher encryptCipher = Cipher.getInstance("RSA");
         encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
         return encryptCipher.doFinal(toEncode);
     }
 
     @SneakyThrows
-    public byte[] encodeString(String toEncode) {
-        return encodeBytes(toEncode.getBytes(StandardCharsets.UTF_8));
+    public byte[] encodeStringRSA(String toEncode) {
+        return encodeBytesRSA(toEncode.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @SneakyThrows
+    public byte[] encodeBytesForServerRSA(byte[] toEncode) {
+        Cipher encryptCipher = Cipher.getInstance("RSA");
+        encryptCipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
+        return encryptCipher.doFinal(toEncode);
+    }
+
+    @SneakyThrows
+    public byte[] encodeStringForServerRSA(String toEncode) {
+        return encodeBytesForServerRSA(toEncode.getBytes(StandardCharsets.UTF_8));
     }
 
     @SneakyThrows

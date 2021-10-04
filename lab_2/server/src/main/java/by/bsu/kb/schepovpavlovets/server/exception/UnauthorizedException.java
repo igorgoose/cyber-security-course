@@ -19,4 +19,8 @@ public class UnauthorizedException extends RuntimeException {
     public UnauthorizedException(Throwable cause) {
         super(cause);
     }
+
+    public enum Status {
+        INVALID_CLIENT_ID
+    }
 }
