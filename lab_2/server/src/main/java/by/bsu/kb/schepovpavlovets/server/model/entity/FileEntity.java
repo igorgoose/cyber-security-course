@@ -14,15 +14,12 @@ import java.util.UUID;
 @EqualsAndHashCode
 @ToString
 @Entity
-@Table(name = "client")
-public class Client {
-
+@Table(name = "file")
+public class FileEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
-    private String session;
-    private Boolean disabled;
-    private String iv;
-    private LocalDateTime sessionExpiresAt;
-
+    private String name;
+    private LocalDateTime updatedOn;
+    private UUID clientId;
 }

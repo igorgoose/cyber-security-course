@@ -7,4 +7,5 @@ import lombok.Data;
 @Data
 public class SessionKeyDto {
     private String sessionKey;
+    private String iv;
 }

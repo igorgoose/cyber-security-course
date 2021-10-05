@@ -1,0 +1,1 @@
+alter table client add column iv varchar(128) not null default '';

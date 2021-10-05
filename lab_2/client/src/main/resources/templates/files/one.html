@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Home</title>
+    <title>Files</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
           integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
 </head>
@@ -28,13 +28,20 @@
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Connect</button>
             </form>
             <form th:if="${connectionStatus.equals('CONNECTED')}"
-                    class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/integration/disconnect}">
+                  class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/integration/disconnect}">
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Disconnect</button>
             </form>
         </div>
     </nav>
 </div>
 <div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}">
+</div>
+<div class="container-fluid">
+    <h1 th:text="${file.getName() + '(' + file.getLastUpdate() + ')'}"></h1>
+    <div class="form-group">
+        <label for="exampleFormControlTextarea1">File content</label>
+        <textarea class="form-control" id="exampleFormControlTextarea1" rows="10" readonly th:text="${file.getContent()}"></textarea>
+    </div>
 </div>
 <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
         integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"

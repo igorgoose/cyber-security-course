@@ -1,6 +1,6 @@
 package by.bsu.kb.schepovpavlovets.client.service.impl;
 
-import by.bsu.kb.schepovpavlovets.client.exception.ServerConnectionException;
+import by.bsu.kb.schepovpavlovets.client.exception.NoServerException;
 import by.bsu.kb.schepovpavlovets.client.model.dto.PublicKeyDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.ServerSignUpResponseDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.SessionKeyDto;
@@ -52,9 +52,11 @@ public class IntegrationServiceImpl implements IntegrationService {
         ServerData serverData = new ServerData();
         String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(responseDto.getClientId()));
         serverData.setClientId(clientId);
-        String session = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(responseDto.getSessionKey()));
+        String session = Base64.encodeBase64String(cryptUtility.decodeBytesRSA(Base64.decodeBase64(responseDto.getSessionKey())));
+        String iv = Base64.encodeBase64String(cryptUtility.decodeBytesRSA(Base64.decodeBase64(responseDto.getIv())));
         serverData.setSession(session);
         serverData.setStatus(CONNECTED.name());
+        serverData.setIv(iv);
         return serverDataRepository.save(serverData);
     }
 
@@ -69,8 +71,10 @@ public class IntegrationServiceImpl implements IntegrationService {
                                                                     .build();
         ResponseEntity<SessionKeyDto> response = template.postForEntity(serverBaseUrl + sessionEndpoint, requestDto, SessionKeyDto.class);
         SessionKeyDto sessionKeyDto = response.getBody();
-        serverData.setSession(cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(sessionKeyDto.getSessionKey())));
+        serverData.setSession(Base64.encodeBase64String(cryptUtility.decodeBytesRSA(Base64.decodeBase64(sessionKeyDto.getSessionKey()))));
+        String iv = Base64.encodeBase64String(cryptUtility.decodeBytesRSA(Base64.decodeBase64(sessionKeyDto.getIv())));
         serverData.setStatus(CONNECTED.name());
+        serverData.setIv(iv);
         return serverDataRepository.save(serverData);
     }
 
@@ -97,7 +101,7 @@ public class IntegrationServiceImpl implements IntegrationService {
     private ServerData getServerData() {
         List<ServerData> serverDataList = serverDataRepository.findCurrentServerData(PageRequest.of(0, 1));
         if (serverDataList.isEmpty()) {
-            throw new ServerConnectionException("Not signed up for the server!");
+            throw new NoServerException("Not signed up for the server!");
         }
         return serverDataList.get(0);
     }

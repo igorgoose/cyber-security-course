@@ -9,7 +9,7 @@
 <body>
 <div>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" th:href="@{/}">Files Manager</a>
+        <a class="navbar-brand" th:href="@{/}">Notebook</a>
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
                 aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
@@ -22,17 +22,48 @@
                 <li class="nav-item">
                     <a class="nav-link" th:href="@{/files}">Files</a>
                 </li>
+                <li class="nav-item" style="color: white">
+                    <a class="btn btn-primary" th:href="@{/files/create}">New File</a>
+                </li>
             </ul>
-            <form th:if="!connectionStatus.equals('CONNECTED')"
+            <form th:if="${!connectionStatus.equals('CONNECTED')}"
                   class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/integration/connect}">
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Connect</button>
             </form>
-            <form th:if="connectionStatus.equals('CONNECTED')"
+            <form th:if="${connectionStatus.equals('CONNECTED')}"
                   class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/integration/disconnect}">
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Disconnect</button>
             </form>
         </div>
     </nav>
+</div>
+<div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}">
+</div>
+<div class="container-fluid">
+    <h1>Files</h1>
+    <div th:if="${files.isEmpty()}" class="alert alert-info" role="alert">
+        There are no files yet!
+    </div>
+    <table th:if="${!files.isEmpty()}" class="table">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Filename</th>
+            <th>Last Update</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="file : ${files}">
+            <td th:text="${file.getId()}"></td>
+            <td th:text="${file.getFilename()}"></td>
+            <td th:text="${file.getLastUpdate()}"></td>
+            <td>
+                <a class="btn btn-outline-primary my-2 my-sm-0" th:href="@{/files/{id}(id = ${file.getId()})}">View</a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
 </div>
 <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
         integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"

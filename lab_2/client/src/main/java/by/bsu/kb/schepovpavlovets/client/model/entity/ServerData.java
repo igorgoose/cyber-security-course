@@ -18,6 +18,7 @@ public class ServerData {
     private Integer id;
     private String clientId;
     private String session;
+    private String iv;
     private String status;
     private LocalDateTime updatedOn = LocalDateTime.now();
 

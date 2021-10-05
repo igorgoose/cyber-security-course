@@ -31,7 +31,7 @@ public class ClientController {
     }
 
     @PostMapping ("/session/invalidate")
-    public SessionKeyDto invalidateSession(@RequestBody SessionUpdateRequestDto sessionUpdateRequestDto) {
-        return sessionService.generateSessionKeyWithClientId(sessionUpdateRequestDto.getEncodedClientId());
+    public void invalidateSession(@RequestBody SessionUpdateRequestDto sessionUpdateRequestDto) {
+        sessionService.invalidateSession(sessionUpdateRequestDto.getEncodedClientId());
     }
 }

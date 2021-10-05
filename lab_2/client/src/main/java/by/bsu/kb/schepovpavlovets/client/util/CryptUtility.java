@@ -1,14 +1,20 @@
 package by.bsu.kb.schepovpavlovets.client.util;
 
+import by.bsu.kb.schepovpavlovets.client.exception.NoServerException;
 import lombok.SneakyThrows;
+import org.apache.commons.codec.binary.Base64;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.*;
 import java.security.spec.EncodedKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -17,6 +23,12 @@ import java.security.spec.X509EncodedKeySpec;
 @Component
 public class CryptUtility {
 
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
+
+    public static final int KEY_LEN_BYTES = 32;
+    public static final int IV_LEN_BYTES = 16;
     @Value("${content.key.private.path}")
     private String privateKeyPath;
     @Value("${content.key.public.path}")
@@ -29,21 +41,33 @@ public class CryptUtility {
     private PublicKey publicKey;
     private PublicKey serverPublicKey = null;
 
+    private enum EncryptMode {
+        ENCRYPT, DECRYPT;
+    }
+
     @SneakyThrows
     @PostConstruct
     private void init() {
-        File publicKeyFile = new File(contentEnvVar + publicKeyPath);
-        File privateKeyFile = new File(contentEnvVar + privateKeyPath);
+        String contentPath = System.getenv(contentEnvVar);
+        File publicKeyFile = new File(contentPath + publicKeyPath);
+        File privateKeyFile = new File(contentPath + privateKeyPath);
         if (!privateKeyFile.exists() || !publicKeyFile.exists()) {
             generateRSAKeyPair();
         } else {
-            byte[] publicKeyBytes = getClass().getClassLoader().getResourceAsStream(publicKeyPath).readAllBytes();
-            byte[] privateKeyBytes = getClass().getClassLoader().getResourceAsStream(privateKeyPath).readAllBytes();
+            byte[] publicKeyBytes = Files.readAllBytes(publicKeyFile.toPath());
+            byte[] privateKeyBytes = Files.readAllBytes(privateKeyFile.toPath());
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
             publicKey = keyFactory.generatePublic(publicKeySpec);
             EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
             privateKey = keyFactory.generatePrivate(privateKeySpec);
+        }
+        File serverPublicKeyFile = new File(contentPath + serverPublicKeyPath);
+        if (serverPublicKeyFile.exists()) {
+            byte[] serverPublicKeyBytes = Files.readAllBytes(serverPublicKeyFile.toPath());
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(serverPublicKeyBytes);
+            serverPublicKey = keyFactory.generatePublic(publicKeySpec);
         }
     }
 
@@ -84,6 +108,9 @@ public class CryptUtility {
 
     @SneakyThrows
     public byte[] encodeBytesForServerRSA(byte[] toEncode) {
+        if (serverPublicKey == null) {
+            throw new NoServerException("Not signed up for the server!");
+        }
         Cipher encryptCipher = Cipher.getInstance("RSA");
         encryptCipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
         return encryptCipher.doFinal(toEncode);
@@ -112,5 +139,37 @@ public class CryptUtility {
 
     public byte[] getPublicKeyEncoded() {
         return publicKey != null ? publicKey.getEncoded() : null;
+    }
+
+    public String encryptSerpent(String plainText, String key, String iv) {
+        return encryptDecrypt(plainText, key, EncryptMode.ENCRYPT, iv);
+    }
+
+
+    public String decryptSerpent(String encryptedText, String key, String iv) {
+        return encryptDecrypt(encryptedText, key, EncryptMode.DECRYPT, iv);
+    }
+
+    @SneakyThrows
+    private String encryptDecrypt(String inputText, String encryptionKey,
+            EncryptMode mode, String initVector) {
+        byte[] keyBytes = new byte[KEY_LEN_BYTES];
+        byte[] ivBytes = new byte[IV_LEN_BYTES];
+
+        System.arraycopy(Base64.decodeBase64(encryptionKey), 0, keyBytes, 0, KEY_LEN_BYTES);
+        System.arraycopy(Base64.decodeBase64(initVector), 0, ivBytes, 0, IV_LEN_BYTES);
+        SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "Serpent");
+        IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
+        Cipher cipher = Cipher.getInstance("Serpent/CBC/PKCS5Padding");
+
+        if (mode.equals(EncryptMode.ENCRYPT)) {
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
+            byte[] results = cipher.doFinal(inputText.getBytes(StandardCharsets.UTF_8));
+            return Base64.encodeBase64String(results);
+        }
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
+        byte[] decodedValue = Base64.decodeBase64(inputText.getBytes(StandardCharsets.UTF_8));
+        byte[] decryptedVal = cipher.doFinal(decodedValue);
+        return new String(decryptedVal, StandardCharsets.UTF_8);
     }
 }

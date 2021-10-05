@@ -5,11 +5,8 @@ import by.bsu.kb.schepovpavlovets.client.service.IntegrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-
-import java.util.ArrayList;
 
 import static by.bsu.kb.schepovpavlovets.client.model.entity.ServerData.ConnectionStatus.NO_SERVER;
 
@@ -29,13 +26,13 @@ public class IntegrationController {
             serverData = integrationService.getNewSession();
         }
         model.addAttribute("connectionStatus", serverData.getStatus());
-        return "redirect:/files/index";
+        return "redirect:/";
     }
 
     @PostMapping("/disconnect")
     public String disconnect(Model model) {
         ServerData serverData = integrationService.invalidateSession();
         model.addAttribute("connectionStatus", serverData.getStatus());
-        return "redirect:/index";
+        return "redirect:/";
     }
 }

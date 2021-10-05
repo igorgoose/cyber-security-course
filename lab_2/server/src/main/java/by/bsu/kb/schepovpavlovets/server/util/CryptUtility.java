@@ -52,13 +52,14 @@ public class CryptUtility {
     @SneakyThrows
     @PostConstruct
     private void init() {
-        File publicKeyFile = new File(contentEnvVar + publicKeyPath);
-        File privateKeyFile = new File(contentEnvVar + privateKeyPath);
+        String contentPath = System.getenv(contentEnvVar);
+        File publicKeyFile = new File(contentPath + publicKeyPath);
+        File privateKeyFile = new File(contentPath + privateKeyPath);
         if (!privateKeyFile.exists() || !publicKeyFile.exists()) {
             generateRSAKeyPair();
         } else {
-            byte[] publicKeyBytes = getClass().getClassLoader().getResourceAsStream(publicKeyPath).readAllBytes();
-            byte[] privateKeyBytes = getClass().getClassLoader().getResourceAsStream(privateKeyPath).readAllBytes();
+            byte[] publicKeyBytes = Files.readAllBytes(publicKeyFile.toPath());
+            byte[] privateKeyBytes = Files.readAllBytes(privateKeyFile.toPath());
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
             publicKey = keyFactory.generatePublic(publicKeySpec);
@@ -153,8 +154,8 @@ public class CryptUtility {
         byte[] keyBytes = new byte[KEY_LEN_BYTES];
         byte[] ivBytes = new byte[IV_LEN_BYTES];
 
-        System.arraycopy(encryptionKey.getBytes(StandardCharsets.UTF_8), 0, keyBytes, 0, KEY_LEN_BYTES);
-        System.arraycopy(initVector.getBytes(StandardCharsets.UTF_8), 0, ivBytes, 0, IV_LEN_BYTES);
+        System.arraycopy(Base64.decodeBase64(encryptionKey), 0, keyBytes, 0, KEY_LEN_BYTES);
+        System.arraycopy(Base64.decodeBase64(initVector), 0, ivBytes, 0, IV_LEN_BYTES);
         SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "Serpent");
         IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
         Cipher cipher = Cipher.getInstance("Serpent/CBC/PKCS5Padding");
@@ -162,10 +163,10 @@ public class CryptUtility {
         if (mode.equals(EncryptMode.ENCRYPT)) {
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
             byte[] results = cipher.doFinal(inputText.getBytes(StandardCharsets.UTF_8));
-            return new String(Base64.encodeBase64(results,false));
+            return Base64.encodeBase64String(results);
         }
         cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
-        byte[] decodedValue = Base64.decodeBase64(inputText.getBytes(StandardCharsets.UTF_8));
+        byte[] decodedValue = Base64.decodeBase64(inputText);
         byte[] decryptedVal = cipher.doFinal(decodedValue);
         return new String(decryptedVal, StandardCharsets.UTF_8);
 

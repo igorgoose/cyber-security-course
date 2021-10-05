@@ -21,6 +21,6 @@ public class UnauthorizedException extends RuntimeException {
     }
 
     public enum Status {
-        INVALID_CLIENT_ID
+        INVALID_CLIENT_ID, INVALID_SESSION, SESSION_EXPIRED
     }
 }
