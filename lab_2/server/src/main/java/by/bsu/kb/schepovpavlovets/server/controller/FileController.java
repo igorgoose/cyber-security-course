@@ -28,11 +28,16 @@ public class FileController {
 
     @PostMapping
     public void saveFile(@CookieValue("clientId") String encodedClientId, @RequestBody FileRequestDto fileRequestDto) {
-        fileService.saveClientFile(encodedClientId, fileRequestDto.getEncodedFilename(), fileRequestDto.getEncodedContent());
+        fileService.saveClientFile(encodedClientId, fileRequestDto.getEncodedFilename(), fileRequestDto.getEncodedContent(), fileRequestDto.getEncodedNamespace());
     }
 
     @PostMapping("/delete")
     public void deleteFile(@CookieValue("clientId") String encodedClientId, @RequestParam("fileId") String encodedFileId) {
         fileService.deleteClientFile(encodedClientId, encodedFileId);
+    }
+
+    @PostMapping("/namespace")
+    public void createFolders(@CookieValue("clientId") String encodedClientId, @RequestParam("namespace") String encodedNamespace) {
+        fileService.createNamespace(encodedClientId, encodedNamespace);
     }
 }

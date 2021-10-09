@@ -1,6 +1,5 @@
 package by.bsu.kb.schepovpavlovets.server.util;
 
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +43,8 @@ public class CryptUtility {
     private String privateKeyPath;
     @Value("${content.key.public.path}")
     private String publicKeyPath;
+    @Value("${content.key.folder}")
+    private String keyFolder;
     @Value("${content.key.client.public.path}")
     private String clientPublicKeyPath;
     private PrivateKey privateKey;
@@ -53,6 +54,10 @@ public class CryptUtility {
     @PostConstruct
     private void init() {
         String contentPath = System.getenv(contentEnvVar);
+        File keysFolder = new File(contentPath + keyFolder);
+        if (!keysFolder.exists()) {
+            Files.createDirectory(keysFolder.toPath());
+        }
         File publicKeyFile = new File(contentPath + publicKeyPath);
         File privateKeyFile = new File(contentPath + privateKeyPath);
         if (!privateKeyFile.exists() || !publicKeyFile.exists()) {

@@ -19,9 +19,11 @@ public interface FileService {
 
     @Transactional
     @SneakyThrows
-    void saveClientFile(String encodedClientId, String encodedFilename, String encodedContent);
+    void saveClientFile(String encodedClientId, String encodedFilename, String encodedContent, String encodedFolder);
 
     @Transactional
     @SneakyThrows
     void deleteClientFile(String encodedClientId, String encodedFileId);
+
+    void createNamespace(String encodedClientId, String encodedFolders);
 }

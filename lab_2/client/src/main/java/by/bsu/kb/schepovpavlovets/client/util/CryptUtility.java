@@ -35,6 +35,8 @@ public class CryptUtility {
     private String publicKeyPath;
     @Value("${content.key.server.public.path}")
     private String serverPublicKeyPath;
+    @Value("${content.key.folder}")
+    private String keyFolder;
     @Value("${content.env-var}")
     private String contentEnvVar;
     private PrivateKey privateKey;
@@ -49,6 +51,10 @@ public class CryptUtility {
     @PostConstruct
     private void init() {
         String contentPath = System.getenv(contentEnvVar);
+        File keysFolder = new File(contentPath + keyFolder);
+        if (!keysFolder.exists()) {
+            Files.createDirectory(keysFolder.toPath());
+        }
         File publicKeyFile = new File(contentPath + publicKeyPath);
         File privateKeyFile = new File(contentPath + privateKeyPath);
         if (!privateKeyFile.exists() || !publicKeyFile.exists()) {

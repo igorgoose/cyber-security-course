@@ -14,9 +14,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.apache.commons.codec.binary.Base64;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cglib.core.Local;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 
+import javax.annotation.PostConstruct;
 import javax.transaction.Transactional;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -42,10 +44,21 @@ public class FileServiceImpl implements FileService {
     private final CryptUtility cryptUtility;
     @Value("${content.env-var}")
     private String contentEnvVar;
-    @Value("${content.files.folder}")
+    @Value("${content.files.client.folder}")
     private String clientFilesFolder;
+    @Value("${content.files.folder}")
+    private String filesFolder;
     @Value("${content.files.name}")
     private String clientFilePath;
+
+    @SneakyThrows
+    @PostConstruct
+    private void init() {
+        File filesFolder = new File(System.getenv(contentEnvVar) + this.filesFolder);
+        if (!filesFolder.exists()) {
+            Files.createDirectory(filesFolder.toPath());
+        }
+    }
 
     @SneakyThrows
     @Override
@@ -91,7 +104,7 @@ public class FileServiceImpl implements FileService {
     @Transactional
     @SneakyThrows
     @Override
-    public void saveClientFile(String encodedClientId, String encodedFilename, String encodedContent) {
+    public void saveClientFile(String encodedClientId, String encodedFilename, String encodedContent, String encodedFolder) {
         Client client = getCurrentClient(encodedClientId);
         String content = cryptUtility.decryptSerpent(encodedContent, client.getSession(), client.getIv());
         String filename = cryptUtility.decryptSerpent(encodedFilename, client.getSession(), client.getIv());
@@ -118,6 +131,21 @@ public class FileServiceImpl implements FileService {
         File file = new File((contentPath + clientFilePath).replaceFirst(CLIENT_ID_REGEX, client.getId().toString()).replaceFirst(FILE_ID_REGEX, fileEntity.getId().toString()));
         Files.delete(file.toPath());
         fileRepository.deleteById(fileEntity.getId());
+    }
+
+    @SneakyThrows
+    @Override
+    public void createNamespace(String encodedClientId, String encodedNamespace) {
+        Client client = getCurrentClient(encodedClientId);
+        if (encodedNamespace.equals("")) {
+            throw new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Namespace param must not be empty!");
+        }
+        String folders = cryptUtility.decryptSerpent(encodedNamespace, client.getSession(), client.getIv());
+        if (folders.equals("")) {
+            throw new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Namespace param must not be empty!");
+        }
+        File newFolders = new File(System.getenv(contentEnvVar) + clientFilesFolder.replaceFirst(CLIENT_ID_REGEX, client.getId().toString()) + folders);
+        Files.createDirectory(newFolders.toPath());
     }
 
     private FileShortDto convertToShortDto(FileEntity fileEntity, Client client) {

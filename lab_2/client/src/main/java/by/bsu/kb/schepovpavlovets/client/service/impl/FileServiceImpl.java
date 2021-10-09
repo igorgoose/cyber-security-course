@@ -46,6 +46,8 @@ public class FileServiceImpl implements FileService {
     private String serverFileEndpoint;
     @Value("${kb2.server.files.delete}")
     private String serverFilesDeleteEndpoint;
+    @Value("${kb2.server.files.namespace}")
+    private String serverFilesNamespaceEndpoint;
     @Value("${kb2.server.cookie}")
     private String cookieName;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -70,14 +72,7 @@ public class FileServiceImpl implements FileService {
         CloseableHttpResponse response = client.execute(httpPost);
 
         if (response.getStatusLine().getStatusCode() != 200) {
-            ServerErrorDto serverErrorDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
-            if (ServerError.INVALID_SESSION.name().equals(serverErrorDto.getMessage()) || ServerError.SESSION_EXPIRED.name().equals(serverErrorDto.getMessage())){
-                serverData.setStatus(ServerData.ConnectionStatus.DISCONNECTED.name());
-                serverDataRepository.save(serverData);
-            } else if (ServerError.INVALID_CLIENT_ID.name().equals(serverErrorDto.getMessage())) {
-                serverDataRepository.deleteByClientId(serverData.getClientId());
-            }
-            throw new FileServiceException(serverErrorDto.getMessage());
+            processServerErrorResponse(serverData, response);
         }
     }
 
@@ -99,15 +94,9 @@ public class FileServiceImpl implements FileService {
             fileShortDtos.forEach(fileShortDto -> decodeFileShortDto(fileShortDto, serverData));
             return fileShortDtos;
         } else {
-            ServerErrorDto serverErrorDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
-            if (ServerError.INVALID_SESSION.name().equals(serverErrorDto.getMessage()) || ServerError.SESSION_EXPIRED.name().equals(serverErrorDto.getMessage())){
-                serverData.setStatus(ServerData.ConnectionStatus.DISCONNECTED.name());
-                serverDataRepository.save(serverData);
-            } else if (ServerError.INVALID_CLIENT_ID.name().equals(serverErrorDto.getMessage())) {
-                serverDataRepository.deleteByClientId(serverData.getClientId());
-            }
-            throw new FileServiceException(serverErrorDto.getMessage());
+            processServerErrorResponse(serverData, response);
         }
+        throw new FileServiceException("Unexpected error occurred. Please try again later!");
     }
 
     @Transactional(dontRollbackOn = FileServiceException.class)
@@ -128,15 +117,39 @@ public class FileServiceImpl implements FileService {
             decodeFileDto(fileDto, serverData);
             return fileDto;
         } else {
-            ServerErrorDto serverErrorDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
-            if (ServerError.INVALID_SESSION.name().equals(serverErrorDto.getMessage()) || ServerError.SESSION_EXPIRED.name().equals(serverErrorDto.getMessage())){
-                serverData.setStatus(ServerData.ConnectionStatus.DISCONNECTED.name());
-                serverDataRepository.save(serverData);
-            } else if (ServerError.INVALID_CLIENT_ID.name().equals(serverErrorDto.getMessage())) {
-                serverDataRepository.deleteByClientId(serverData.getClientId());
-            }
-            throw new FileServiceException(serverErrorDto.getMessage());
+            processServerErrorResponse(serverData, response);
         }
+        throw new FileServiceException("Unexpected error occurred. Please try again later!");
+    }
+
+    @SneakyThrows
+    private void processServerErrorResponse(ServerData serverData, CloseableHttpResponse response) {
+        ServerErrorDto serverErrorDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
+        if (ServerError.INVALID_SESSION.name().equals(serverErrorDto.getMessage()) || ServerError.SESSION_EXPIRED.name().equals(serverErrorDto.getMessage())){
+            serverData.setStatus(ServerData.ConnectionStatus.DISCONNECTED.name());
+            serverDataRepository.save(serverData);
+        } else if (ServerError.INVALID_CLIENT_ID.name().equals(serverErrorDto.getMessage())) {
+            serverDataRepository.deleteByClientId(serverData.getClientId());
+        }
+        throw new FileServiceException(serverErrorDto.getMessage());
+    }
+
+    @Transactional(dontRollbackOn = FileServiceException.class)
+    @SneakyThrows
+    @Override
+    public void createNamespace(String namespace) {
+        ServerData serverData = getServerData();
+        String encodedClientId = Base64.encodeBase64String(cryptUtility.encodeStringForServerRSA(serverData.getClientId()));
+        String encodedNamespace = cryptUtility.encryptSerpent(namespace, serverData.getSession(), serverData.getIv());
+        CloseableHttpClient client = HttpClients.createDefault();
+
+        HttpPost httpPost = new HttpPost(serverBaseUrl + serverFilesNamespaceEndpoint + "?namespace=" + encodedNamespace);
+        httpPost.setHeader("Cookie", cookieName + "=" + encodedClientId);
+        httpPost.setHeader("Accept", "application/json");
+        httpPost.setHeader("Content-type", "application/json");
+        CloseableHttpResponse response = client.execute(httpPost);
+
+        processServerErrorResponse(serverData, response);
     }
 
     private ServerData getServerData() {
