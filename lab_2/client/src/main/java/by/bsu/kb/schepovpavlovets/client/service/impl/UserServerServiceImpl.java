@@ -1,12 +1,17 @@
 package by.bsu.kb.schepovpavlovets.client.service.impl;
 
 import by.bsu.kb.schepovpavlovets.client.exception.BadRequestException;
+import by.bsu.kb.schepovpavlovets.client.exception.ConnectivityException;
 import by.bsu.kb.schepovpavlovets.client.exception.NotFoundException;
+import by.bsu.kb.schepovpavlovets.client.exception.ServerError;
+import by.bsu.kb.schepovpavlovets.client.model.dto.ServerErrorDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.UserServerDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.UserServerShortDto;
+import by.bsu.kb.schepovpavlovets.client.model.entity.ServerConnection;
 import by.bsu.kb.schepovpavlovets.client.model.entity.ServerData;
 import by.bsu.kb.schepovpavlovets.client.model.entity.User;
 import by.bsu.kb.schepovpavlovets.client.model.entity.UserServer;
+import by.bsu.kb.schepovpavlovets.client.repository.ServerConnectionRepository;
 import by.bsu.kb.schepovpavlovets.client.repository.ServerDataRepository;
 import by.bsu.kb.schepovpavlovets.client.repository.UserServerRepository;
 import by.bsu.kb.schepovpavlovets.client.security.AppUserDetails;
@@ -33,6 +38,7 @@ public class UserServerServiceImpl implements UserServerService {
     private final IntegrationService integrationService;
     private final UserServerRepository userServerRepository;
     private final ServerDataRepository serverDataRepository;
+    private final ServerConnectionRepository serverConnectionRepository;
     private final Converter<UserServer, UserServerShortDto> userServerShortDtoConverter;
     private final Converter<UserServer, UserServerDto> userServerDtoConverter;
 
@@ -86,5 +92,20 @@ public class UserServerServiceImpl implements UserServerService {
         userServer.setNamespaceCreated(false);
         userServerRepository.save(userServer);
         return userServerShortDtoConverter.convert(userServerRepository.findById(userServer.getId()).orElseThrow());
+    }
+
+    @Transactional
+    @Override
+    public void deleteUserServer(String userServerId) {
+        UserServer userServer = getUserServer(UUID.fromString(userServerId));
+        ServerConnection currentServerConnection = serverConnectionRepository.findByUserServerId(userServer.getId()).orElse(null);
+        if (currentServerConnection != null) {
+            ServerErrorDto serverErrorDto = integrationService.disconnect(currentServerConnection);
+            if (serverErrorDto != null && !serverErrorDto.getMessage().equals(ServerError.UNKNOWN_CONNECTION.name())) {
+                throw new ConnectivityException(serverErrorDto.getMessage());
+            }
+            serverConnectionRepository.deleteById(currentServerConnection.getId());
+        }
+        userServerRepository.deleteById(userServer.getId());
     }
 }

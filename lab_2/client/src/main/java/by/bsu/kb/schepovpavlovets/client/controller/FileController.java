@@ -17,13 +17,11 @@ import java.util.List;
 @RequestMapping("/files")
 public class FileController {
     private final FileService fileService;
-    private final IntegrationService integrationService;
 
     @GetMapping
     public String index(Model model) {
         List<FileShortDto> fileShortDtos = fileService.getFiles();
         model.addAttribute("files", fileShortDtos);
-        model.addAttribute("connectionStatus", integrationService.getConnectionStatus());
         return "files/index";
     }
 
@@ -31,20 +29,38 @@ public class FileController {
     public String one(@PathVariable String fileId, Model model) {
         FileDto fileDto = fileService.getFile(fileId);
         model.addAttribute("file", fileDto);
-        model.addAttribute("connectionStatus", integrationService.getConnectionStatus());
         return "files/one";
     }
 
     @GetMapping("/create")
-    public String create(Model model) {
-        model.addAttribute("connectionStatus", integrationService.getConnectionStatus());
+    public String create() {
         return "files/create";
+    }
+
+    @GetMapping("/{fileId}/edit")
+    public String edit(@PathVariable String fileId, Model model) {
+        FileDto fileDto = fileService.getFile(fileId);
+        model.addAttribute("file", fileDto);
+        return "files/edit";
     }
 
     @PostMapping
     public String save(@ModelAttribute("filename") String filename,
             @ModelAttribute("content") String content) {
         fileService.saveFile(content, filename);
+        return "redirect:/files";
+    }
+
+    @PostMapping("/{fileId}/edit")
+    public String updateFile(@PathVariable String fileId, @ModelAttribute("filename") String filename,
+            @ModelAttribute("content") String content) {
+        fileService.editFile(fileId, filename, content);
+        return "redirect:/files/" + fileId;
+    }
+
+    @PostMapping("/{fileId}/delete")
+    public String deleteFile(@PathVariable String fileId) {
+        fileService.deleteFile(fileId);
         return "redirect:/files";
     }
 }

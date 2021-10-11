@@ -6,10 +6,7 @@ import by.bsu.kb.schepovpavlovets.client.service.UserServerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -47,6 +44,12 @@ public class ServerController {
     @PostMapping("/disconnect")
     public String disconnect(@ModelAttribute("userServerId") String userServerId) {
         serverConnectionService.disconnectFromServer(UUID.fromString(userServerId));
+        return "redirect:/servers";
+    }
+
+    @PostMapping("/{id}/delete")
+    public String deleteUserServer(@PathVariable String id) {
+        userServerService.deleteUserServer(id);
         return "redirect:/servers";
     }
 

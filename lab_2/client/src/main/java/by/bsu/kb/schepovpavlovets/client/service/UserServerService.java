@@ -17,4 +17,7 @@ public interface UserServerService {
 
     @Transactional
     UserServerShortDto saveUserServer(String name, String ip, String port);
+
+    @Transactional
+    void deleteUserServer(String userServerId);
 }

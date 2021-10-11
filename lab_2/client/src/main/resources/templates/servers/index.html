@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Home</title>
+    <title>Servers</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
           integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="stylesheet" type="text/css" th:href="@{/css/main.css}">
@@ -33,24 +33,34 @@
         </div>
     </nav>
 </div>
-<div class="container-fluid mt-20">
-    <div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}"></div>
-    <div class="card-deck">
-        <div class="card" th:each="server : ${servers}">
-            <div class="card-body">
-                <h5 class="card-title" th:text="${server.name}">Server name</h5>
-                <h6 class="card-subtitle mb-2 text-muted" th:text="${server.ip + ':' + server.port}">ip:port</h6>
-                <div class="row">
-                    <a th:action="@{/servers/{id}/edit(id = ${server.getId()})}"
-                       class="btn btn-outline-primary my-2 ml-3 mr-2">Edit</a>
-                    <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/servers/connect}" th:if="${!server.isConnected()}">
-                        <button type="submit" class="btn btn-success my-2 mr-sm-2 my-sm-0">Connect</button>
-                        <input type="hidden" th:value="${server.getId()}" name="userServerId">
-                    </form>
-                    <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/servers/disconnect}" th:if="${server.isConnected()}">
-                        <button type="submit" class="btn btn-danger my-2 mr-sm-2 my-sm-0">Disconnect</button>
-                        <input type="hidden" th:value="${server.getId()}" name="userServerId">
-                    </form>
+<div style="margin-top: 20px">
+    <div class="container-fluid">
+        <div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}"></div>
+        <div th:if="${servers == null || servers.isEmpty()}" class="alert alert-info" role="alert">
+            You haven't added any servers yet!
+        </div>
+        <div class="card-deck">
+            <div class="card" th:each="server : ${servers}">
+                <div class="card-body">
+                    <h5 class="card-title" th:text="${server.name}">Server name</h5>
+                    <h6 class="card-subtitle mb-2 text-muted" th:text="${server.ip + ':' + server.port}">ip:port</h6>
+                    <div class="row">
+                        <form class="form-inline my-2 my-lg-0 ml-3" th:method="post" th:action="@{/servers/connect}"
+                              th:if="${!server.isConnected()}">
+                            <button type="submit" class="btn btn-success my-2 mr-sm-2 my-sm-0">Connect</button>
+                            <input type="hidden" th:value="${server.getId()}" name="userServerId">
+                        </form>
+                        <form class="form-inline my-2 my-lg-0 ml-3" th:method="post" th:action="@{/servers/disconnect}"
+                              th:if="${server.isConnected()}">
+                            <button type="submit" class="btn btn-warning my-2 mr-sm-2 my-sm-0">Disconnect</button>
+                            <input type="hidden" th:value="${server.getId()}" name="userServerId">
+                        </form>
+<!--                        <a th:action="@{/servers/{id}/edit(id = ${server.getId()})}"-->
+<!--                           class="btn btn-primary my-2 mr-2" style="color: white">Edit</a>-->
+                        <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/servers/{id}/delete(id=${server.getId()})}">
+                            <button type="submit" class="btn btn-danger my-2 mr-sm-2 my-sm-0">Remove</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

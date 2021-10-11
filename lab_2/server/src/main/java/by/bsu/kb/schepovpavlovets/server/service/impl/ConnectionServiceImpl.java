@@ -1,8 +1,7 @@
 package by.bsu.kb.schepovpavlovets.server.service.impl;
 
 import by.bsu.kb.schepovpavlovets.server.exception.UnauthorizedException;
-import by.bsu.kb.schepovpavlovets.server.model.dto.ClientConnectionDto;
-import by.bsu.kb.schepovpavlovets.server.model.dto.SignUpResponseDto;
+import by.bsu.kb.schepovpavlovets.server.model.dto.*;
 import by.bsu.kb.schepovpavlovets.server.model.entity.Client;
 import by.bsu.kb.schepovpavlovets.server.model.entity.ClientConnection;
 import by.bsu.kb.schepovpavlovets.server.repository.ClientConnectionRepository;
@@ -35,25 +34,29 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     @Transactional
     @Override
-    public SignUpResponseDto signUpClient(String publicKey) {
+    public SignedMessageDto<SignUpResponseDto> signUpClient(SignedMessageDto<ClientPublicKeyDto> signedRequest) {
+        cryptUtility.verifySignature(signedRequest, signedRequest.getContent().getBase64Key());
         Client client = new Client();
         client.setDisabled(false);
         clientRepository.save(client);
-        byte[] publicKeyBytes = Base64.decodeBase64(publicKey);
+        byte[] publicKeyBytes = Base64.decodeBase64(signedRequest.getContent().getBase64Key());
+        byte[] publicKeyRSABytes = Base64.decodeBase64(signedRequest.getContent().getBase64KeyRsa());
         cryptUtility.saveClientPublicKey(publicKeyBytes, client.getId().toString());
+        cryptUtility.saveClientPublicKeyRSA(publicKeyRSABytes, client.getId().toString());
         fileService.createClientFolder(client.getId().toString());
-        return SignUpResponseDto.builder()
-                                .publicKey(Base64.encodeBase64String(cryptUtility.getPublicKeyEncoded())) // base64 server public key
-                                .clientId(cryptUtility.encodeStringBase64RSA(client.getId().toString(), client.getId().toString())) // clientId base64
-                                .build();
+        return cryptUtility.signResponse(SignUpResponseDto.builder()
+                                .publicKey(Base64.encodeBase64String(cryptUtility.getPublicKeyEncoded()))
+                                .clientId(client.getId().toString())
+                                .build());
     }
 
     @Transactional
     @Override
-    public ClientConnectionDto createClientConnection(String encodedClientId, String encodedNamespace) {
-        String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientId));
-        String namespace = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedNamespace));
+    public SignedMessageDto<ClientConnectionDto> createClientConnection(SignedMessageDto<ConnectRequestDto> signedRequest) {
+        String clientId = signedRequest.getContent().getEncodedClientId();
+        String namespace = signedRequest.getContent().getEncodedNamespace();
         Client client = clientRepository.findById(UUID.fromString(clientId)).orElseThrow(() -> new UnauthorizedException(INVALID_CLIENT_ID.name()));
+        cryptUtility.verifySignature(signedRequest, client.getId());
         ClientConnection clientConnection = new ClientConnection();
         clientConnection.setClient(client);
         byte[] sessionBytes = cryptUtility.generateRandomBytes(32);
@@ -66,20 +69,22 @@ public class ConnectionServiceImpl implements ConnectionService {
         clientConnection.setExpiresAt(expiresAt.plus(1, ChronoUnit.SECONDS));
         clientConnectionRepository.save(clientConnection);
         fileService.createNamespace(clientId, namespace);
-        return ClientConnectionDto.builder()
-                                  .connectionId(cryptUtility.encodeStringBase64RSA(clientConnection.getId().toString(), clientId))
-                                  .sessionKey(cryptUtility.encodeBytesBase64RSA(sessionBytes, clientId))
-                                  .iv(cryptUtility.encodeBytesBase64RSA(ivBytes, clientId))
-                                  .expiresAt(cryptUtility.encodeStringBase64RSA(dtf.format(expiresAt), clientId))
-                                  .build();
+        //todo think of encryption
+        return cryptUtility.signResponse(ClientConnectionDto.builder()
+                                  .connectionId(clientConnection.getId().toString())
+                                  .sessionKey(cryptUtility.encodeBytesBase64RSA(sessionBytes, client.getId().toString()))
+                                  .iv(cryptUtility.encodeBytesBase64RSA(ivBytes, client.getId().toString()))
+                                  .expiresAt(dtf.format(expiresAt))
+                                  .build());
     }
 
     @Transactional
     @Override
-    public void destroyClientConnection(String encodedClientId, String encodedConnectionId) {
-        String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientId));
-        String connectionId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedConnectionId));
+    public void destroyClientConnection(SignedMessageDto<DisconnectRequestDto> signedRequest) {
+        String clientId = signedRequest.getContent().getEncodedClientId();
+        String connectionId = signedRequest.getContent().getEncodedConnectionId();
         Client client = clientRepository.findById(UUID.fromString(clientId)).orElseThrow(() -> new UnauthorizedException(INVALID_CLIENT_ID.name()));
+        cryptUtility.verifySignature(signedRequest, client.getId());
         if (!clientConnectionRepository.existsByIdAndClientId(UUID.fromString(connectionId), client.getId())) {
             throw new UnauthorizedException(UNKNOWN_CONNECTION.name());
         }

@@ -1,16 +1,15 @@
 package by.bsu.kb.schepovpavlovets.server.service;
 
-import by.bsu.kb.schepovpavlovets.server.model.dto.ClientConnectionDto;
-import by.bsu.kb.schepovpavlovets.server.model.dto.SignUpResponseDto;
+import by.bsu.kb.schepovpavlovets.server.model.dto.*;
 
 import javax.transaction.Transactional;
 
 public interface ConnectionService {
 
-    SignUpResponseDto signUpClient(String publicKey);
+    SignedMessageDto<SignUpResponseDto> signUpClient(SignedMessageDto<ClientPublicKeyDto> publicKey);
 
-    ClientConnectionDto createClientConnection(String encodedClientId, String encodedNamespace);
+    SignedMessageDto<ClientConnectionDto> createClientConnection(SignedMessageDto<ConnectRequestDto> signedRequest);
 
     @Transactional
-    void destroyClientConnection(String encodedClientId, String encodedConnectionId);
+    void destroyClientConnection(SignedMessageDto<DisconnectRequestDto> signedRequest);
 }

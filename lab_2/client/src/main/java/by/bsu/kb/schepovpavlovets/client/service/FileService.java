@@ -14,4 +14,8 @@ public interface FileService {
 
     @SneakyThrows
     FileDto getFile(String fileId);
+
+    void editFile(String fileId, String filename, String content);
+
+    void deleteFile(String fileId);
 }

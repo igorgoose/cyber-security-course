@@ -16,5 +16,4 @@ public interface IntegrationService {
 
     ServerErrorDto disconnect(ServerConnection serverConnection);
 
-    String getConnectionStatus();
 }

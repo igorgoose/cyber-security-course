@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Builder
 @Data
-public class PublicKeyDto {
-    private String base64Key;
-    private String base64KeyRsa;
+public class DeleteFileRequestDto {
+    private String encodedFileId;
+    private String encodedNamespace;
 }

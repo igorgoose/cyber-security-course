@@ -2,8 +2,7 @@ package by.bsu.kb.schepovpavlovets.server.service.impl;
 
 import by.bsu.kb.schepovpavlovets.server.exception.NotFoundException;
 import by.bsu.kb.schepovpavlovets.server.exception.UnauthorizedException;
-import by.bsu.kb.schepovpavlovets.server.model.dto.FileDto;
-import by.bsu.kb.schepovpavlovets.server.model.dto.FileShortDto;
+import by.bsu.kb.schepovpavlovets.server.model.dto.*;
 import by.bsu.kb.schepovpavlovets.server.model.entity.ClientConnection;
 import by.bsu.kb.schepovpavlovets.server.model.entity.FileEntity;
 import by.bsu.kb.schepovpavlovets.server.repository.ClientConnectionRepository;
@@ -13,7 +12,6 @@ import by.bsu.kb.schepovpavlovets.server.service.FileService;
 import by.bsu.kb.schepovpavlovets.server.util.CryptUtility;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import org.apache.commons.codec.binary.Base64;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -73,17 +71,17 @@ public class FileServiceImpl implements FileService {
     @Transactional
     @SneakyThrows
     @Override
-    public List<FileShortDto> getClientFiles(String encodedCookie, String encodedNamespace) {
+    public SignedMessageDto<List<FileShortDto>> getClientFiles(String encodedCookie, String encodedNamespace) {
         ClientConnection clientConnection = processClientCookie(encodedCookie);
         String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
         List<FileEntity> fileEntities = fileRepository.findByClientIdAndNamespaceOrderByUpdatedOnDesc(clientConnection.getClient().getId(), namespace);
-        return fileEntities.stream().map(fileEntity_ -> convertToShortDto(fileEntity_, clientConnection)).collect(Collectors.toList());
+        return cryptUtility.signResponse(fileEntities.stream().map(fileEntity_ -> convertToShortDto(fileEntity_, clientConnection)).collect(Collectors.toList()));
     }
 
     @Transactional
     @SneakyThrows
     @Override
-    public FileDto getClientFile(String encodedCookie, String encodedNamespace, String encodedFileId) {
+    public SignedMessageDto<FileDto> getClientFile(String encodedCookie, String encodedNamespace, String encodedFileId) {
         ClientConnection clientConnection = processClientCookie(encodedCookie);
         String fileId = cryptUtility.decryptSerpent(encodedFileId, clientConnection.getSession(), clientConnection.getIv());
         String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
@@ -97,22 +95,24 @@ public class FileServiceImpl implements FileService {
         String encodedContent = cryptUtility.encryptSerpent(content, clientConnection.getSession(), clientConnection.getIv());
         String encodedFileName = cryptUtility.encryptSerpent(fileEntity.getName(), clientConnection.getSession(), clientConnection.getIv());
         String encodedLastUpdate = cryptUtility.encryptSerpent(dtf.format(fileEntity.getUpdatedOn()), clientConnection.getSession(), clientConnection.getIv());
-        return FileDto.builder()
+        return cryptUtility.signResponse(FileDto.builder()
                       .id(encodedFileId)
                       .content(encodedContent)
                       .name(encodedFileName)
                       .lastUpdate(encodedLastUpdate)
-                      .build();
+                      .build());
     }
 
     @Transactional
     @SneakyThrows
     @Override
-    public void saveClientFile(String encodedCookie, String encodedFilename, String encodedContent, String encodedNamespace) {
+    public void saveClientFile(String encodedCookie, SignedMessageDto<FileRequestDto> signedRequest) {
         ClientConnection clientConnection = processClientCookie(encodedCookie);
-        String content = cryptUtility.decryptSerpent(encodedContent, clientConnection.getSession(), clientConnection.getIv());
-        String filename = cryptUtility.decryptSerpent(encodedFilename, clientConnection.getSession(), clientConnection.getIv());
-        String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
+        cryptUtility.verifySignature(signedRequest, clientConnection.getClient().getId());
+        FileRequestDto fileRequestDto = signedRequest.getContent();
+        String content = cryptUtility.decryptSerpent(fileRequestDto.getEncodedContent(), clientConnection.getSession(), clientConnection.getIv());
+        String filename = cryptUtility.decryptSerpent(fileRequestDto.getEncodedFilename(), clientConnection.getSession(), clientConnection.getIv());
+        String namespace = cryptUtility.decryptSerpent(fileRequestDto.getEncodedNamespace(), clientConnection.getSession(), clientConnection.getIv());
         FileEntity fileEntity = new FileEntity();
         fileEntity.setName(filename);
         fileEntity.setClientId(clientConnection.getClient().getId());
@@ -133,10 +133,11 @@ public class FileServiceImpl implements FileService {
     @Transactional
     @SneakyThrows
     @Override
-    public void deleteClientFile(String encodedCookie, String encodedNamespace, String encodedFileId) {
+    public void deleteClientFile(String encodedCookie, SignedMessageDto<DeleteFileRequestDto> signedRequest) {
         ClientConnection clientConnection = processClientCookie(encodedCookie);
-        String fileId = cryptUtility.decryptSerpent(encodedFileId, clientConnection.getSession(), clientConnection.getIv());
-        String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
+        cryptUtility.verifySignature(signedRequest, clientConnection.getClient().getId());
+        String fileId = cryptUtility.decryptSerpent(signedRequest.getContent().getEncodedFileId(), clientConnection.getSession(), clientConnection.getIv());
+        String namespace = cryptUtility.decryptSerpent(signedRequest.getContent().getEncodedNamespace(), clientConnection.getSession(), clientConnection.getIv());
         FileEntity fileEntity = fileRepository.findByIdAndNamespace(UUID.fromString(fileId), namespace).orElseThrow(() -> new NotFoundException("File not found"));
         String contentPath = System.getenv(contentEnvVar);
         File file = new File((contentPath + clientFilePath)
@@ -159,6 +160,36 @@ public class FileServiceImpl implements FileService {
         }
     }
 
+    @Transactional(dontRollbackOn = NotFoundException.class)
+    @SneakyThrows
+    @Override
+    public void editClientFile(String encodedCookie, SignedMessageDto<EditFileRequestDto> signedRequest) {
+        ClientConnection clientConnection = processClientCookie(encodedCookie);
+        cryptUtility.verifySignature(signedRequest, clientConnection.getClient().getId());
+        EditFileRequestDto editFileRequestDto = signedRequest.getContent();
+        String fileId = cryptUtility.decryptSerpent(editFileRequestDto.getFileId(), clientConnection.getSession(), clientConnection.getIv());
+        String namespace = cryptUtility.decryptSerpent(editFileRequestDto.getNamespace(), clientConnection.getSession(), clientConnection.getIv());
+        FileEntity fileEntity = fileRepository.findByIdAndNamespace(UUID.fromString(fileId), namespace).orElseThrow(() -> new NotFoundException("File not found"));
+        String contentPath = System.getenv(contentEnvVar);
+        File file = new File((contentPath + clientFilePath)
+                .replaceFirst(CLIENT_ID_REGEX, clientConnection.getClient().getId().toString())
+                .replaceFirst(NAMESPACE_REGEX, namespace)
+                .replaceFirst(FILE_ID_REGEX, fileEntity.getId().toString())
+        );
+        if (!file.exists()) {
+            fileRepository.deleteById(fileEntity.getId());
+            throw new NotFoundException("File not found");
+        }
+        String filename = cryptUtility.decryptSerpent(editFileRequestDto.getName(), clientConnection.getSession(), clientConnection.getIv());
+        String content = cryptUtility.decryptSerpent(editFileRequestDto.getContent(), clientConnection.getSession(), clientConnection.getIv());
+        fileEntity.setName(filename);
+        fileEntity.setUpdatedOn(LocalDateTime.now());
+        fileRepository.save(fileEntity);
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            fos.write(content.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
     private FileShortDto convertToShortDto(FileEntity fileEntity, ClientConnection clientConnection) {
         return FileShortDto.builder()
                            .id(cryptUtility.encryptSerpent(fileEntity.getId().toString(), clientConnection.getSession(), clientConnection.getIv()))
@@ -168,8 +199,8 @@ public class FileServiceImpl implements FileService {
     }
 
     private ClientConnection processClientCookie(String encodedClientCookie) {
-        String clientCookie = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientCookie));
-        String[] cookieData = clientCookie.split(":");
+//        String clientCookie = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientCookie));
+        String[] cookieData = encodedClientCookie.split(":");
         if (cookieData.length != 2) {
             throw new UnauthorizedException(INVALID_COOKIE.name());
         }

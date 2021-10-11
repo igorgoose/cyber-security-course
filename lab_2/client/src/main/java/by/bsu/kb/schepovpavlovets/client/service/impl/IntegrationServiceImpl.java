@@ -7,6 +7,7 @@ import by.bsu.kb.schepovpavlovets.client.repository.ServerDataRepository;
 import by.bsu.kb.schepovpavlovets.client.security.AppUserDetails;
 import by.bsu.kb.schepovpavlovets.client.service.IntegrationService;
 import by.bsu.kb.schepovpavlovets.client.util.CryptUtility;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -20,6 +21,9 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.params.HttpParams;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -60,18 +64,24 @@ public class IntegrationServiceImpl implements IntegrationService {
     public ServerData signUpForServer(String ip, String port) {
         PublicKeyDto publicKeyDto = PublicKeyDto.builder()
                                                 .base64Key(Base64.encodeBase64String(cryptUtility.getPublicKeyEncoded()))
+                                                .base64KeyRsa(Base64.encodeBase64String(cryptUtility.getPublicKeyRSAEncoded()))
                                                 .build();
+        SignedMessageDto<PublicKeyDto> signedRequest = cryptUtility.signRequest(publicKeyDto);
         String serverBaseUrl = serverBaseUrlTemplate.replaceFirst(IP_URL_REGEX, ip).replaceFirst(PORT_URL_REGEX, port);
-        ResponseEntity<ServerSignUpResponseDto> response = template.postForEntity(serverBaseUrl + signUpEndpoint, publicKeyDto, ServerSignUpResponseDto.class);
-        ServerSignUpResponseDto responseDto = response.getBody();
+        ResponseEntity<SignedMessageDto<ServerSignUpResponseDto>> response = template.exchange(serverBaseUrl + signUpEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(signedRequest),
+                new ParameterizedTypeReference<>() {});
+        SignedMessageDto<ServerSignUpResponseDto> responseDto = response.getBody();
+        cryptUtility.verifySignature(responseDto, responseDto.getContent().getPublicKey());
         ServerData serverData = new ServerData();
-        String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(responseDto.getClientId()));
+        String clientId = responseDto.getContent().getClientId();
         serverData.setClientId(clientId);
         serverData.setIp(ip);
         serverData.setPort(port);
         serverData.setUpdatedOn(LocalDateTime.now());
         serverDataRepository.save(serverData);
-        cryptUtility.saveServerPublicKey(Base64.decodeBase64(responseDto.getPublicKey()), serverData.getId());
+        cryptUtility.saveServerPublicKey(Base64.decodeBase64(responseDto.getContent().getPublicKey()), serverData.getId());
         return serverData;
     }
 
@@ -79,51 +89,50 @@ public class IntegrationServiceImpl implements IntegrationService {
     @SneakyThrows
     @Override
     public ServerConnectionResponseDto connect(ServerData serverData) {
-        byte[] encodedClientId = cryptUtility.encodeStringForServerRSA(serverData.getClientId(), serverData.getId());
         AppUserDetails userDetails = (AppUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        byte[] encodedNamespace = cryptUtility.encodeStringForServerRSA(userDetails.getId().toString(), serverData.getId());
         ConnectionRequestDto requestDto = ConnectionRequestDto.builder()
-                                                              .encodedClientId(Base64.encodeBase64String(encodedClientId))
-                                                              .encodedNamespace(Base64.encodeBase64String(encodedNamespace))
+                                                              .encodedClientId(serverData.getClientId())
+                                                              .encodedNamespace(userDetails.getId().toString())
                                                               .build();
+        SignedMessageDto<ConnectionRequestDto> signedRequest = cryptUtility.signRequest(requestDto);
         String serverBaseUrl = serverBaseUrlTemplate.replaceFirst(IP_URL_REGEX, serverData.getIp()).replaceFirst(PORT_URL_REGEX, serverData.getPort());
-        ResponseEntity<ServerConnectionResponseDto> response = template.postForEntity(serverBaseUrl + connectionEndpoint, requestDto, ServerConnectionResponseDto.class);
-        ServerConnectionResponseDto responseDto = response.getBody();
-        responseDto.setConnectionId(cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(responseDto.getConnectionId())));
+        ResponseEntity<SignedMessageDto<ServerConnectionResponseDto>> response = template.exchange(serverBaseUrl + connectionEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(signedRequest),
+                new ParameterizedTypeReference<>() {});
+        SignedMessageDto<ServerConnectionResponseDto> signedResponseDto = response.getBody();
+        cryptUtility.verifySignature(signedResponseDto, serverData.getId());
+        ServerConnectionResponseDto responseDto = signedResponseDto.getContent();
         responseDto.setSessionKey(cryptUtility.decodeBytesToBase64RSA(Base64.decodeBase64(responseDto.getSessionKey())));
         responseDto.setIv(cryptUtility.decodeBytesToBase64RSA(Base64.decodeBase64(responseDto.getIv())));
-        responseDto.setExpiresAt(cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(responseDto.getExpiresAt())));
-        return response.getBody();
+        return responseDto;
     }
 
     @SneakyThrows
     @Override
     public ServerErrorDto disconnect(ServerConnection serverConnection) {
         ServerData serverData = serverConnection.getUserServer().getServerData();
-        byte[] encodedClientId = cryptUtility.encodeStringForServerRSA(serverData.getClientId(), serverData.getId());
-        byte[] encodedConnectionId = cryptUtility.encodeStringForServerRSA(serverConnection.getId().toString(), serverData.getId());
         DisconnectRequestDto requestDto = DisconnectRequestDto.builder()
-                .encodedClientId(Base64.encodeBase64String(encodedClientId))
-                .encodedConnectionId(Base64.encodeBase64String(encodedConnectionId))
+                .encodedClientId(serverData.getClientId())
+                .encodedConnectionId(serverConnection.getId().toString())
                 .build();
 
+        SignedMessageDto<DisconnectRequestDto> signedRequest = cryptUtility.signRequest(requestDto);
         String serverBaseUrl = serverBaseUrlTemplate.replaceFirst(IP_URL_REGEX, serverData.getIp()).replaceFirst(PORT_URL_REGEX, serverData.getPort());
         CloseableHttpClient client = HttpClients.createDefault();
         HttpPost httpPost = new HttpPost(serverBaseUrl + disconnectEndpoint);
-        httpPost.setEntity(new StringEntity(objectMapper.writeValueAsString(requestDto)));
+        httpPost.setEntity(new StringEntity(objectMapper.writeValueAsString(signedRequest)));
         httpPost.setHeader("Accept", "application/json");
         httpPost.setHeader("Content-type", "application/json");
         CloseableHttpResponse response = client.execute(httpPost);
 
         if (response.getStatusLine().getStatusCode() != 200) {
-            return objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
+            SignedMessageDto<ServerErrorDto> signedMessageDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8),
+                    new TypeReference<>() {});
+            cryptUtility.verifySignature(signedMessageDto, serverData.getId());
+            return signedMessageDto.getContent();
         }
         return null;
-    }
-
-    @Override
-    public String getConnectionStatus() {
-        return "DISCONNECTED";
     }
 
 }

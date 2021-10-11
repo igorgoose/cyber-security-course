@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 public class ClientController {
 
     private final ConnectionService connectionService;
-    private final FileService fileService;
 
     @GetMapping
     public String ok() {
@@ -20,17 +19,17 @@ public class ClientController {
     }
 
     @PostMapping ("/signUp")
-    public SignUpResponseDto signUpClient(@RequestBody ClientPublicKeyDto clientPublicKeyDto) {
-        return connectionService.signUpClient(clientPublicKeyDto.getBase64Key());
+    public SignedMessageDto<SignUpResponseDto> signUpClient(@RequestBody SignedMessageDto<ClientPublicKeyDto> signedRequest) {
+        return connectionService.signUpClient(signedRequest);
     }
 
     @PostMapping ("/connect")
-    public ClientConnectionDto connect(@RequestBody ConnectRequestDto connectRequestDto) {
-        return connectionService.createClientConnection(connectRequestDto.getEncodedClientId(), connectRequestDto.getEncodedNamespace());
+    public SignedMessageDto<ClientConnectionDto> connect(@RequestBody SignedMessageDto<ConnectRequestDto> signedRequest) {
+        return connectionService.createClientConnection(signedRequest);
     }
 
     @PostMapping ("/disconnect")
-    public void disconnect(@RequestBody DisconnectRequestDto disconnectRequestDto) {
-        connectionService.destroyClientConnection(disconnectRequestDto.getEncodedClientId(), disconnectRequestDto.getEncodedConnectionId());
+    public void disconnect(@RequestBody SignedMessageDto<DisconnectRequestDto> signedRequest) {
+        connectionService.destroyClientConnection(signedRequest);
     }
 }

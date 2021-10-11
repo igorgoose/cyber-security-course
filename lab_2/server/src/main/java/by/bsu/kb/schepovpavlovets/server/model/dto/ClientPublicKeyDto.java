@@ -5,4 +5,5 @@ import lombok.Data;
 @Data
 public class ClientPublicKeyDto {
     private String base64Key;
+    private String base64KeyRsa;
 }
