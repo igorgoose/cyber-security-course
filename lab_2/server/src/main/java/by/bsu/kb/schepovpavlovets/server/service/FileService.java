@@ -11,19 +11,19 @@ public interface FileService {
     void createClientFolder(String encodedClientId);
 
     @SneakyThrows
-    List<FileShortDto> getClientFiles(String encodedClientId);
+    List<FileShortDto> getClientFiles(String encodedClientId, String encodedNamespace);
 
     @Transactional
     @SneakyThrows
-    FileDto getClientFile(String encodedClientId, String encodedFileId);
+    FileDto getClientFile(String encodedCookie, String encodedNamespace, String encodedFileId);
 
     @Transactional
     @SneakyThrows
-    void saveClientFile(String encodedClientId, String encodedFilename, String encodedContent, String encodedFolder);
+    void saveClientFile(String encodedCookie, String encodedFilename, String encodedContent, String encodedNamespace);
 
     @Transactional
     @SneakyThrows
-    void deleteClientFile(String encodedClientId, String encodedFileId);
+    void deleteClientFile(String encodedClientId, String encodedNamespace, String encodedFileId);
 
-    void createNamespace(String encodedClientId, String encodedFolders);
+    void createNamespace(String clientId, String namespace);
 }

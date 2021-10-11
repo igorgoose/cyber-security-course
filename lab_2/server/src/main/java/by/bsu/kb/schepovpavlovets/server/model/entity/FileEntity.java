@@ -22,4 +22,5 @@ public class FileEntity {
     private String name;
     private LocalDateTime updatedOn;
     private UUID clientId;
+    private String namespace;
 }

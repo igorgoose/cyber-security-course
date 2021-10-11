@@ -6,6 +6,7 @@ import lombok.Data;
 @Builder
 @Data
 public class FileRequestDto {
+    private String encodedNamespace;
     private String encodedFilename;
     private String encodedContent;
 }

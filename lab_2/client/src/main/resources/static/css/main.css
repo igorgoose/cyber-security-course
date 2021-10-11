@@ -1,0 +1,3 @@
+.card-deck .card {
+    max-width: calc(15% - 30px);
+}

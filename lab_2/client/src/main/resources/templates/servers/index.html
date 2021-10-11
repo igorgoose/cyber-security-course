@@ -2,9 +2,10 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Files</title>
+    <title>Home</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
           integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" th:href="@{/css/main.css}">
 </head>
 <body>
 <div>
@@ -22,6 +23,9 @@
                 <li class="nav-item">
                     <a class="nav-link" th:href="@{/files}">Files</a>
                 </li>
+                <li class="nav-item" style="color: white">
+                    <a class="btn btn-primary" th:href="@{/servers/create}">New Server</a>
+                </li>
             </ul>
             <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/logout}">
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Sign Out</button>
@@ -29,13 +33,27 @@
         </div>
     </nav>
 </div>
-<div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}">
-</div>
-<div class="container-fluid">
-    <h1 th:text="${file.getName() + ' (' + file.getLastUpdate() + ')'}"></h1>
-    <div class="form-group">
-        <label for="exampleFormControlTextarea1">File content</label>
-        <textarea class="form-control" id="exampleFormControlTextarea1" rows="10" readonly th:text="${file.getContent()}"></textarea>
+<div class="container-fluid mt-20">
+    <div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}"></div>
+    <div class="card-deck">
+        <div class="card" th:each="server : ${servers}">
+            <div class="card-body">
+                <h5 class="card-title" th:text="${server.name}">Server name</h5>
+                <h6 class="card-subtitle mb-2 text-muted" th:text="${server.ip + ':' + server.port}">ip:port</h6>
+                <div class="row">
+                    <a th:action="@{/servers/{id}/edit(id = ${server.getId()})}"
+                       class="btn btn-outline-primary my-2 ml-3 mr-2">Edit</a>
+                    <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/servers/connect}" th:if="${!server.isConnected()}">
+                        <button type="submit" class="btn btn-success my-2 mr-sm-2 my-sm-0">Connect</button>
+                        <input type="hidden" th:value="${server.getId()}" name="userServerId">
+                    </form>
+                    <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/servers/disconnect}" th:if="${server.isConnected()}">
+                        <button type="submit" class="btn btn-danger my-2 mr-sm-2 my-sm-0">Disconnect</button>
+                        <input type="hidden" th:value="${server.getId()}" name="userServerId">
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"

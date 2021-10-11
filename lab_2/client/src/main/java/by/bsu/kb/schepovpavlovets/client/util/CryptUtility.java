@@ -19,6 +19,7 @@ import java.security.*;
 import java.security.spec.EncodedKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.UUID;
 
 @Component
 public class CryptUtility {
@@ -27,6 +28,7 @@ public class CryptUtility {
         Security.addProvider(new BouncyCastleProvider());
     }
 
+    private static final String SERVER_ID_REGEX = "\\{server_id}";
     public static final int KEY_LEN_BYTES = 32;
     public static final int IV_LEN_BYTES = 16;
     @Value("${content.key.private.path}")
@@ -34,14 +36,13 @@ public class CryptUtility {
     @Value("${content.key.public.path}")
     private String publicKeyPath;
     @Value("${content.key.server.public.path}")
-    private String serverPublicKeyPath;
+    private String serverPublicKeyPathTemplate;
     @Value("${content.key.folder}")
     private String keyFolder;
     @Value("${content.env-var}")
     private String contentEnvVar;
     private PrivateKey privateKey;
     private PublicKey publicKey;
-    private PublicKey serverPublicKey = null;
 
     private enum EncryptMode {
         ENCRYPT, DECRYPT;
@@ -68,24 +69,20 @@ public class CryptUtility {
             EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
             privateKey = keyFactory.generatePrivate(privateKeySpec);
         }
-        File serverPublicKeyFile = new File(contentPath + serverPublicKeyPath);
-        if (serverPublicKeyFile.exists()) {
-            byte[] serverPublicKeyBytes = Files.readAllBytes(serverPublicKeyFile.toPath());
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(serverPublicKeyBytes);
-            serverPublicKey = keyFactory.generatePublic(publicKeySpec);
+    }
+
+    @SneakyThrows
+    public void saveServerPublicKey(byte[] publicKeyBytes, UUID serverId) {
+        String contentPath = System.getenv(contentEnvVar);
+        String serverPublicKeyPath = serverPublicKeyPathTemplate.replaceFirst(SERVER_ID_REGEX, serverId.toString());
+        try (FileOutputStream fos = new FileOutputStream((contentPath + serverPublicKeyPath))) {
+            fos.write(publicKeyBytes);
         }
     }
 
     @SneakyThrows
-    public void saveServerPublicKey(byte[] publicKeyBytes) {
-        String contentPath = System.getenv(contentEnvVar);
-        try (FileOutputStream fos = new FileOutputStream((contentPath + serverPublicKeyPath))) {
-            fos.write(publicKeyBytes);
-        }
-        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-        EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
-        serverPublicKey = keyFactory.generatePublic(publicKeySpec);
+    public String decodeBytesToBase64RSA(byte[] encodedBytes) {
+        return Base64.encodeBase64String(decodeBytesRSA(encodedBytes));
     }
 
     @SneakyThrows
@@ -113,8 +110,16 @@ public class CryptUtility {
     }
 
     @SneakyThrows
-    public byte[] encodeBytesForServerRSA(byte[] toEncode) {
-        if (serverPublicKey == null) {
+    public byte[] encodeBytesForServerRSA(byte[] toEncode, UUID serverId) {
+        String contentPath = System.getenv(contentEnvVar);
+        File serverPublicKeyFile = new File(contentPath + serverPublicKeyPathTemplate.replaceFirst(SERVER_ID_REGEX, serverId.toString()));
+        PublicKey serverPublicKey;
+        if (serverPublicKeyFile.exists()) {
+            byte[] serverPublicKeyBytes = Files.readAllBytes(serverPublicKeyFile.toPath());
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(serverPublicKeyBytes);
+            serverPublicKey = keyFactory.generatePublic(publicKeySpec);
+        } else {
             throw new NoServerException("Not signed up for the server!");
         }
         Cipher encryptCipher = Cipher.getInstance("RSA");
@@ -123,8 +128,8 @@ public class CryptUtility {
     }
 
     @SneakyThrows
-    public byte[] encodeStringForServerRSA(String toEncode) {
-        return encodeBytesForServerRSA(toEncode.getBytes(StandardCharsets.UTF_8));
+    public byte[] encodeStringForServerRSA(String toEncode, UUID serverId) {
+        return encodeBytesForServerRSA(toEncode.getBytes(StandardCharsets.UTF_8), serverId);
     }
 
     @SneakyThrows

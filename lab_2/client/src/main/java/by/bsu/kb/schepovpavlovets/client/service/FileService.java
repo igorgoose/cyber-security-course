@@ -14,6 +14,4 @@ public interface FileService {
 
     @SneakyThrows
     FileDto getFile(String fileId);
-
-    void createNamespace(String namespace);
 }

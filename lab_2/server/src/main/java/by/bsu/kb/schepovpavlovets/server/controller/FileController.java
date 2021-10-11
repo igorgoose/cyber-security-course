@@ -1,5 +1,6 @@
 package by.bsu.kb.schepovpavlovets.server.controller;
 
+import by.bsu.kb.schepovpavlovets.server.model.dto.DeleteFileRequestDto;
 import by.bsu.kb.schepovpavlovets.server.model.dto.FileDto;
 import by.bsu.kb.schepovpavlovets.server.model.dto.FileRequestDto;
 import by.bsu.kb.schepovpavlovets.server.model.dto.FileShortDto;
@@ -17,27 +18,22 @@ public class FileController {
     private final FileService fileService;
 
     @GetMapping
-    public List<FileShortDto> getFiles(@CookieValue("clientId") String encodedClientId) {
-        return fileService.getClientFiles(encodedClientId);
+    public List<FileShortDto> getFiles(@CookieValue("client") String encodedCookie, @RequestParam("namespace") String encodedNamespace) {
+        return fileService.getClientFiles(encodedCookie, encodedNamespace);
     }
 
     @GetMapping("/one")
-    public FileDto getFile(@CookieValue("clientId") String encodedClientId, @RequestParam("fileId") String encodedFileId) {
-        return fileService.getClientFile(encodedClientId, encodedFileId);
+    public FileDto getFile(@CookieValue("client") String encodedCookie, @RequestParam("namespace") String encodedNamespace, @RequestParam("fileId") String encodedFileId) {
+        return fileService.getClientFile(encodedCookie, encodedNamespace, encodedFileId);
     }
 
     @PostMapping
-    public void saveFile(@CookieValue("clientId") String encodedClientId, @RequestBody FileRequestDto fileRequestDto) {
-        fileService.saveClientFile(encodedClientId, fileRequestDto.getEncodedFilename(), fileRequestDto.getEncodedContent(), fileRequestDto.getEncodedNamespace());
+    public void saveFile(@CookieValue("client") String encodedCookie, @RequestBody FileRequestDto fileRequestDto) {
+        fileService.saveClientFile(encodedCookie, fileRequestDto.getEncodedFilename(), fileRequestDto.getEncodedContent(), fileRequestDto.getEncodedNamespace());
     }
 
     @PostMapping("/delete")
-    public void deleteFile(@CookieValue("clientId") String encodedClientId, @RequestParam("fileId") String encodedFileId) {
-        fileService.deleteClientFile(encodedClientId, encodedFileId);
-    }
-
-    @PostMapping("/namespace")
-    public void createFolders(@CookieValue("clientId") String encodedClientId, @RequestParam("namespace") String encodedNamespace) {
-        fileService.createNamespace(encodedClientId, encodedNamespace);
+    public void deleteFile(@CookieValue("client") String encodedCookie, @RequestBody DeleteFileRequestDto deleteFileRequestDto) {
+        fileService.deleteClientFile(encodedCookie, deleteFileRequestDto.getEncodedNamespace(), deleteFileRequestDto.getEncodedFileId());
     }
 }

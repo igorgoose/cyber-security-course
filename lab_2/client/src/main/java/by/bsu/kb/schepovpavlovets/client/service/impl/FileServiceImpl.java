@@ -1,15 +1,18 @@
 package by.bsu.kb.schepovpavlovets.client.service.impl;
 
 import by.bsu.kb.schepovpavlovets.client.exception.FileServiceException;
-import by.bsu.kb.schepovpavlovets.client.exception.NoServerException;
 import by.bsu.kb.schepovpavlovets.client.exception.ServerError;
 import by.bsu.kb.schepovpavlovets.client.model.dto.FileDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.FileRequestDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.FileShortDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.ServerErrorDto;
+import by.bsu.kb.schepovpavlovets.client.model.entity.ServerConnection;
 import by.bsu.kb.schepovpavlovets.client.model.entity.ServerData;
 import by.bsu.kb.schepovpavlovets.client.repository.ServerDataRepository;
+import by.bsu.kb.schepovpavlovets.client.repository.UserServerRepository;
+import by.bsu.kb.schepovpavlovets.client.security.AppUserDetails;
 import by.bsu.kb.schepovpavlovets.client.service.FileService;
+import by.bsu.kb.schepovpavlovets.client.service.ServerConnectionService;
 import by.bsu.kb.schepovpavlovets.client.util.CryptUtility;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,7 +27,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
@@ -36,18 +39,20 @@ import java.util.List;
 @Service
 public class FileServiceImpl implements FileService {
 
+    private static final String IP_URL_REGEX = "\\{server_ip}";
+    private static final String PORT_URL_REGEX = "\\{server_port}";
     private final CryptUtility cryptUtility;
     private final ServerDataRepository serverDataRepository;
+    private final ServerConnectionService serverConnectionService;
+    private final UserServerRepository userServerRepository;
     @Value("${kb2.server.base-url}")
-    private String serverBaseUrl;
+    private String serverBaseUrlTemplate;
     @Value("${kb2.server.files}")
     private String serverFilesEndpoint;
     @Value("${kb2.server.files.one}")
     private String serverFileEndpoint;
     @Value("${kb2.server.files.delete}")
     private String serverFilesDeleteEndpoint;
-    @Value("${kb2.server.files.namespace}")
-    private String serverFilesNamespaceEndpoint;
     @Value("${kb2.server.cookie}")
     private String cookieName;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -56,23 +61,31 @@ public class FileServiceImpl implements FileService {
     @SneakyThrows
     @Override
     public void saveFile(String content, String filename) {
-        ServerData serverData = getServerData();
+        ServerConnection serverConnection = serverConnectionService.getCurrentServerConnection();
+        AppUserDetails userDetails = (AppUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String encodedNamespace = cryptUtility.encryptSerpent(userDetails.getId().toString(), serverConnection.getSession(), serverConnection.getIv());
+
         FileRequestDto fileRequestDto = FileRequestDto.builder()
-                .encodedContent(cryptUtility.encryptSerpent(content, serverData.getSession(), serverData.getIv()))
-                .encodedFilename(cryptUtility.encryptSerpent(filename, serverData.getSession(), serverData.getIv()))
+                                                      .encodedContent(
+                                                              cryptUtility.encryptSerpent(content, serverConnection.getSession(), serverConnection.getIv()))
+                                                      .encodedFilename(
+                                                              cryptUtility.encryptSerpent(filename, serverConnection.getSession(), serverConnection.getIv()))
+                                                      .encodedNamespace(encodedNamespace)
                                                       .build();
-        String encodedClientId = Base64.encodeBase64String(cryptUtility.encodeStringForServerRSA(serverData.getClientId()));
 
         CloseableHttpClient client = HttpClients.createDefault();
+        String serverBaseUrl = serverBaseUrlTemplate
+                .replaceFirst(IP_URL_REGEX, serverConnection.getUserServer().getServerData().getIp())
+                .replaceFirst(PORT_URL_REGEX, serverConnection.getUserServer().getServerData().getPort());
         HttpPost httpPost = new HttpPost(serverBaseUrl + serverFilesEndpoint);
-        httpPost.setHeader("Cookie", cookieName + "=" + encodedClientId);
+        httpPost.setHeader("Cookie", cookieName + "=" + encodeCookie(serverConnection));
         httpPost.setEntity(new StringEntity(objectMapper.writeValueAsString(fileRequestDto)));
         httpPost.setHeader("Accept", "application/json");
         httpPost.setHeader("Content-type", "application/json");
         CloseableHttpResponse response = client.execute(httpPost);
 
         if (response.getStatusLine().getStatusCode() != 200) {
-            processServerErrorResponse(serverData, response);
+            processServerErrorResponse(serverConnection, response);
         }
     }
 
@@ -80,21 +93,27 @@ public class FileServiceImpl implements FileService {
     @SneakyThrows
     @Override
     public List<FileShortDto> getFiles() {
-        ServerData serverData = getServerData();
-        String encodedClientId = Base64.encodeBase64String(cryptUtility.encodeStringForServerRSA(serverData.getClientId()));
+        ServerConnection serverConnection = serverConnectionService.getCurrentServerConnection();
+        AppUserDetails userDetails = (AppUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String encodedNamespace = cryptUtility.encryptSerpent(userDetails.getId().toString(), serverConnection.getSession(), serverConnection.getIv());
+        String serverBaseUrl = serverBaseUrlTemplate
+                .replaceFirst(IP_URL_REGEX, serverConnection.getUserServer().getServerData().getIp())
+                .replaceFirst(PORT_URL_REGEX, serverConnection.getUserServer().getServerData().getPort());
 
         CloseableHttpClient client = HttpClients.createDefault();
-        HttpGet httpGet = new HttpGet(serverBaseUrl + serverFilesEndpoint);
-        httpGet.setHeader("Cookie", cookieName + "=" + encodedClientId);
+        HttpGet httpGet = new HttpGet(serverBaseUrl + serverFilesEndpoint + "?namespace=" + URLEncoder.encode(encodedNamespace, StandardCharsets.UTF_8));
+        httpGet.setHeader("Cookie", cookieName + "=" + encodeCookie(serverConnection));
         httpGet.setHeader("Accept", "application/json");
         CloseableHttpResponse response = client.execute(httpGet);
 
         if (response.getStatusLine().getStatusCode() == 200) {
-            List<FileShortDto> fileShortDtos = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), new TypeReference<>() {});
-            fileShortDtos.forEach(fileShortDto -> decodeFileShortDto(fileShortDto, serverData));
+            List<FileShortDto> fileShortDtos = objectMapper
+                    .readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), new TypeReference<>() {
+                    });
+            fileShortDtos.forEach(fileShortDto -> decodeFileShortDto(fileShortDto, serverConnection));
             return fileShortDtos;
         } else {
-            processServerErrorResponse(serverData, response);
+            processServerErrorResponse(serverConnection, response);
         }
         throw new FileServiceException("Unexpected error occurred. Please try again later!");
     }
@@ -103,73 +122,58 @@ public class FileServiceImpl implements FileService {
     @SneakyThrows
     @Override
     public FileDto getFile(String fileId) {
-        ServerData serverData = getServerData();
-        String encodedClientId = Base64.encodeBase64String(cryptUtility.encodeStringForServerRSA(serverData.getClientId()));
-        String encodedFileId = cryptUtility.encryptSerpent(fileId, serverData.getSession(), serverData.getIv());
+        ServerConnection serverConnection = serverConnectionService.getCurrentServerConnection();
+        AppUserDetails userDetails = (AppUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String encodedNamespace = cryptUtility.encryptSerpent(userDetails.getId().toString(), serverConnection.getSession(), serverConnection.getIv());
+        String encodedFileId = cryptUtility.encryptSerpent(fileId, serverConnection.getSession(), serverConnection.getIv());
+        String serverBaseUrl = serverBaseUrlTemplate
+                .replaceFirst(IP_URL_REGEX, serverConnection.getUserServer().getServerData().getIp())
+                .replaceFirst(PORT_URL_REGEX, serverConnection.getUserServer().getServerData().getPort());
+
         CloseableHttpClient client = HttpClients.createDefault();
-        HttpGet httpGet = new HttpGet(serverBaseUrl + serverFileEndpoint + "?fileId=" + URLEncoder.encode(encodedFileId, StandardCharsets.UTF_8));
-        httpGet.setHeader("Cookie", cookieName + "=" + encodedClientId);
+        HttpGet httpGet = new HttpGet(serverBaseUrl + serverFileEndpoint + "?fileId=" + URLEncoder.encode(encodedFileId, StandardCharsets.UTF_8)
+        + "&namespace=" + URLEncoder.encode(encodedNamespace, StandardCharsets.UTF_8));
+        httpGet.setHeader("Cookie", cookieName + "=" + encodeCookie(serverConnection));
         httpGet.setHeader("Accept", "application/json");
         CloseableHttpResponse response = client.execute(httpGet);
 
         if (response.getStatusLine().getStatusCode() == 200) {
             FileDto fileDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), FileDto.class);
-            decodeFileDto(fileDto, serverData);
+            decodeFileDto(fileDto, serverConnection);
             return fileDto;
         } else {
-            processServerErrorResponse(serverData, response);
+            processServerErrorResponse(serverConnection, response);
         }
         throw new FileServiceException("Unexpected error occurred. Please try again later!");
     }
 
     @SneakyThrows
-    private void processServerErrorResponse(ServerData serverData, CloseableHttpResponse response) {
-        ServerErrorDto serverErrorDto = objectMapper.readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
-        if (ServerError.INVALID_SESSION.name().equals(serverErrorDto.getMessage()) || ServerError.SESSION_EXPIRED.name().equals(serverErrorDto.getMessage())){
-            serverData.setStatus(ServerData.ConnectionStatus.DISCONNECTED.name());
-            serverDataRepository.save(serverData);
-        } else if (ServerError.INVALID_CLIENT_ID.name().equals(serverErrorDto.getMessage())) {
-            serverDataRepository.deleteByClientId(serverData.getClientId());
+    private void processServerErrorResponse(ServerConnection serverConnection, CloseableHttpResponse response) {
+        ServerErrorDto serverErrorDto = objectMapper
+                .readValue(IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8), ServerErrorDto.class);
+        if (ServerError.SESSION_EXPIRED.name().equals(serverErrorDto.getMessage())) {
+            serverConnectionService.disconnectFromServer(serverConnection.getUserServer().getId());
+            throw new FileServiceException("Session expired! You've been disconnected!");
         }
         throw new FileServiceException(serverErrorDto.getMessage());
     }
 
-    @Transactional(dontRollbackOn = FileServiceException.class)
-    @SneakyThrows
-    @Override
-    public void createNamespace(String namespace) {
-        ServerData serverData = getServerData();
-        String encodedClientId = Base64.encodeBase64String(cryptUtility.encodeStringForServerRSA(serverData.getClientId()));
-        String encodedNamespace = cryptUtility.encryptSerpent(namespace, serverData.getSession(), serverData.getIv());
-        CloseableHttpClient client = HttpClients.createDefault();
-
-        HttpPost httpPost = new HttpPost(serverBaseUrl + serverFilesNamespaceEndpoint + "?namespace=" + encodedNamespace);
-        httpPost.setHeader("Cookie", cookieName + "=" + encodedClientId);
-        httpPost.setHeader("Accept", "application/json");
-        httpPost.setHeader("Content-type", "application/json");
-        CloseableHttpResponse response = client.execute(httpPost);
-
-        processServerErrorResponse(serverData, response);
+    private void decodeFileShortDto(FileShortDto fileShortDto, ServerConnection serverConnection) {
+        fileShortDto.setFilename(cryptUtility.decryptSerpent(fileShortDto.getFilename(), serverConnection.getSession(), serverConnection.getIv()));
+        fileShortDto.setId(cryptUtility.decryptSerpent(fileShortDto.getId(), serverConnection.getSession(), serverConnection.getIv()));
+        fileShortDto.setLastUpdate(cryptUtility.decryptSerpent(fileShortDto.getLastUpdate(), serverConnection.getSession(), serverConnection.getIv()));
     }
 
-    private ServerData getServerData() {
-        List<ServerData> serverDataList = serverDataRepository.findCurrentServerData(PageRequest.of(0, 1));
-        if (serverDataList.isEmpty()) {
-            throw new NoServerException("Not signed up for the server!");
-        }
-        return serverDataList.get(0);
+    private void decodeFileDto(FileDto fileDto, ServerConnection serverConnection) {
+        fileDto.setName(cryptUtility.decryptSerpent(fileDto.getName(), serverConnection.getSession(), serverConnection.getIv()));
+        fileDto.setId(cryptUtility.decryptSerpent(fileDto.getId(), serverConnection.getSession(), serverConnection.getIv()));
+        fileDto.setLastUpdate(cryptUtility.decryptSerpent(fileDto.getLastUpdate(), serverConnection.getSession(), serverConnection.getIv()));
+        fileDto.setContent(cryptUtility.decryptSerpent(fileDto.getContent(), serverConnection.getSession(), serverConnection.getIv()));
     }
 
-    private void decodeFileShortDto(FileShortDto fileShortDto, ServerData serverData) {
-        fileShortDto.setFilename(cryptUtility.decryptSerpent(fileShortDto.getFilename(), serverData.getSession(), serverData.getIv()));
-        fileShortDto.setId(cryptUtility.decryptSerpent(fileShortDto.getId(), serverData.getSession(), serverData.getIv()));
-        fileShortDto.setLastUpdate(cryptUtility.decryptSerpent(fileShortDto.getLastUpdate(), serverData.getSession(), serverData.getIv()));
-    }
-
-    private void decodeFileDto(FileDto fileDto, ServerData serverData) {
-        fileDto.setName(cryptUtility.decryptSerpent(fileDto.getName(), serverData.getSession(), serverData.getIv()));
-        fileDto.setId(cryptUtility.decryptSerpent(fileDto.getId(), serverData.getSession(), serverData.getIv()));
-        fileDto.setLastUpdate(cryptUtility.decryptSerpent(fileDto.getLastUpdate(), serverData.getSession(), serverData.getIv()));
-        fileDto.setContent(cryptUtility.decryptSerpent(fileDto.getContent(), serverData.getSession(), serverData.getIv()));
+    private String encodeCookie(ServerConnection serverConnection) {
+        ServerData serverData = serverConnection.getUserServer().getServerData();
+        return Base64.encodeBase64String(
+                cryptUtility.encodeStringForServerRSA(serverData.getClientId() + ":" + serverConnection.getId().toString(), serverData.getId()));
     }
 }

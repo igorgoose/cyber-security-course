@@ -17,7 +17,7 @@
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav mr-auto">
                 <li class="nav-item ">
-                    <a class="nav-link" th:href="@{/}">Home</a>
+                    <a class="nav-link" th:href="@{/servers}">Servers</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" th:href="@{/files}">Files</a>
@@ -26,23 +26,15 @@
                     <a class="btn btn-primary" th:href="@{/files/create}">New File</a>
                 </li>
             </ul>
-            <form th:if="${!connectionStatus.equals('CONNECTED')}"
-                  class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/integration/connect}">
-                <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Connect</button>
-            </form>
-            <form th:if="${connectionStatus.equals('CONNECTED')}"
-                  class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/integration/disconnect}">
-                <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Disconnect</button>
-            </form>
             <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/logout}">
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Sign Out</button>
             </form>
         </div>
     </nav>
 </div>
-<div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}">
-</div>
 <div class="container-fluid">
+    <div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}">
+    </div>
     <h1>Files</h1>
     <div th:if="${files.isEmpty()}" class="alert alert-info" role="alert">
         There are no files yet!

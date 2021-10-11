@@ -5,6 +5,7 @@ import lombok.Data;
 
 @Builder
 @Data
-public class SessionUpdateRequestDto {
+public class ConnectionRequestDto {
     private String encodedClientId;
+    private String encodedNamespace;
 }

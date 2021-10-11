@@ -6,7 +6,6 @@ import lombok.Setter;
 import lombok.ToString;
 
 import javax.persistence.*;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -20,9 +19,6 @@ public class Client {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
-    private String session;
     private Boolean disabled;
-    private String iv;
-    private LocalDateTime sessionExpiresAt;
 
 }

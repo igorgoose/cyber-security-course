@@ -4,8 +4,9 @@ import by.bsu.kb.schepovpavlovets.server.exception.NotFoundException;
 import by.bsu.kb.schepovpavlovets.server.exception.UnauthorizedException;
 import by.bsu.kb.schepovpavlovets.server.model.dto.FileDto;
 import by.bsu.kb.schepovpavlovets.server.model.dto.FileShortDto;
-import by.bsu.kb.schepovpavlovets.server.model.entity.Client;
+import by.bsu.kb.schepovpavlovets.server.model.entity.ClientConnection;
 import by.bsu.kb.schepovpavlovets.server.model.entity.FileEntity;
+import by.bsu.kb.schepovpavlovets.server.repository.ClientConnectionRepository;
 import by.bsu.kb.schepovpavlovets.server.repository.ClientRepository;
 import by.bsu.kb.schepovpavlovets.server.repository.FileRepository;
 import by.bsu.kb.schepovpavlovets.server.service.FileService;
@@ -37,9 +38,11 @@ import static by.bsu.kb.schepovpavlovets.server.exception.UnauthorizedException.
 public class FileServiceImpl implements FileService {
 
     private static final String CLIENT_ID_REGEX = "\\{clientId}";
+    private static final String NAMESPACE_REGEX = "\\{namespace}";
     private static final String FILE_ID_REGEX = "\\{fileId}";
     private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd.MM.yyyy hh:mm:ss");
     private final ClientRepository clientRepository;
+    private final ClientConnectionRepository clientConnectionRepository;
     private final FileRepository fileRepository;
     private final CryptUtility cryptUtility;
     @Value("${content.env-var}")
@@ -70,29 +73,30 @@ public class FileServiceImpl implements FileService {
     @Transactional
     @SneakyThrows
     @Override
-    public List<FileShortDto> getClientFiles(String encodedClientId) {
-        String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientId));
-        Client client = clientRepository.findById(UUID.fromString(clientId)).orElseThrow(() -> new UnauthorizedException(INVALID_CLIENT_ID.name()));
-        if (client.getDisabled()) {
-            throw new UnauthorizedException(INVALID_SESSION.name());
-        }
-        List<FileEntity> fileEntities = fileRepository.findByClientIdOrderByUpdatedOnDesc(client.getId());
-        return fileEntities.stream().map(fileEntity_ -> convertToShortDto(fileEntity_, client)).collect(Collectors.toList());
+    public List<FileShortDto> getClientFiles(String encodedCookie, String encodedNamespace) {
+        ClientConnection clientConnection = processClientCookie(encodedCookie);
+        String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
+        List<FileEntity> fileEntities = fileRepository.findByClientIdAndNamespaceOrderByUpdatedOnDesc(clientConnection.getClient().getId(), namespace);
+        return fileEntities.stream().map(fileEntity_ -> convertToShortDto(fileEntity_, clientConnection)).collect(Collectors.toList());
     }
 
     @Transactional
     @SneakyThrows
     @Override
-    public FileDto getClientFile(String encodedClientId, String encodedFileId) {
-        Client client = getCurrentClient(encodedClientId);
-        String fileId = cryptUtility.decryptSerpent(encodedFileId, client.getSession(), client.getIv());
-        FileEntity fileEntity = fileRepository.findById(UUID.fromString(fileId)).orElseThrow(() -> new NotFoundException("File not found"));
+    public FileDto getClientFile(String encodedCookie, String encodedNamespace, String encodedFileId) {
+        ClientConnection clientConnection = processClientCookie(encodedCookie);
+        String fileId = cryptUtility.decryptSerpent(encodedFileId, clientConnection.getSession(), clientConnection.getIv());
+        String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
+        FileEntity fileEntity = fileRepository.findByIdAndNamespace(UUID.fromString(fileId), namespace).orElseThrow(() -> new NotFoundException("File not found"));
         String contentPath = System.getenv(contentEnvVar);
-        File file = new File((contentPath + clientFilePath).replaceFirst(CLIENT_ID_REGEX, client.getId().toString()).replaceFirst(FILE_ID_REGEX, fileId));
+        File file = new File((contentPath + clientFilePath)
+                .replaceFirst(CLIENT_ID_REGEX, clientConnection.getClient().getId().toString())
+                .replaceFirst(NAMESPACE_REGEX, namespace)
+                .replaceFirst(FILE_ID_REGEX, fileId));
         String content = Files.readString(file.toPath());
-        String encodedContent = cryptUtility.encryptSerpent(content, client.getSession(), client.getIv());
-        String encodedFileName = cryptUtility.encryptSerpent(fileEntity.getName(), client.getSession(), client.getIv());
-        String encodedLastUpdate = cryptUtility.encryptSerpent(dtf.format(fileEntity.getUpdatedOn()), client.getSession(), client.getIv());
+        String encodedContent = cryptUtility.encryptSerpent(content, clientConnection.getSession(), clientConnection.getIv());
+        String encodedFileName = cryptUtility.encryptSerpent(fileEntity.getName(), clientConnection.getSession(), clientConnection.getIv());
+        String encodedLastUpdate = cryptUtility.encryptSerpent(dtf.format(fileEntity.getUpdatedOn()), clientConnection.getSession(), clientConnection.getIv());
         return FileDto.builder()
                       .id(encodedFileId)
                       .content(encodedContent)
@@ -104,17 +108,23 @@ public class FileServiceImpl implements FileService {
     @Transactional
     @SneakyThrows
     @Override
-    public void saveClientFile(String encodedClientId, String encodedFilename, String encodedContent, String encodedFolder) {
-        Client client = getCurrentClient(encodedClientId);
-        String content = cryptUtility.decryptSerpent(encodedContent, client.getSession(), client.getIv());
-        String filename = cryptUtility.decryptSerpent(encodedFilename, client.getSession(), client.getIv());
+    public void saveClientFile(String encodedCookie, String encodedFilename, String encodedContent, String encodedNamespace) {
+        ClientConnection clientConnection = processClientCookie(encodedCookie);
+        String content = cryptUtility.decryptSerpent(encodedContent, clientConnection.getSession(), clientConnection.getIv());
+        String filename = cryptUtility.decryptSerpent(encodedFilename, clientConnection.getSession(), clientConnection.getIv());
+        String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
         FileEntity fileEntity = new FileEntity();
         fileEntity.setName(filename);
-        fileEntity.setClientId(client.getId());
+        fileEntity.setClientId(clientConnection.getClient().getId());
         fileEntity.setUpdatedOn(LocalDateTime.now());
+        fileEntity.setNamespace(namespace);
         fileRepository.save(fileEntity);
         String contentPath = System.getenv(contentEnvVar);
-        File file = new File((contentPath + clientFilePath).replaceFirst(CLIENT_ID_REGEX, client.getId().toString()).replaceFirst(FILE_ID_REGEX, fileEntity.getId().toString()));
+        File file = new File((contentPath + clientFilePath)
+                .replaceFirst(CLIENT_ID_REGEX, clientConnection.getClient().getId().toString())
+                .replaceFirst(NAMESPACE_REGEX, namespace)
+                .replaceFirst(FILE_ID_REGEX, fileEntity.getId().toString())
+        );
         try (FileOutputStream fos = new FileOutputStream(file)) {
             fos.write(content.getBytes(StandardCharsets.UTF_8));
         }
@@ -123,49 +133,55 @@ public class FileServiceImpl implements FileService {
     @Transactional
     @SneakyThrows
     @Override
-    public void deleteClientFile(String encodedClientId, String encodedFileId) {
-        Client client = getCurrentClient(encodedClientId);
-        String fileId = cryptUtility.decryptSerpent(encodedFileId, client.getSession(), client.getIv());
-        FileEntity fileEntity = fileRepository.findById(UUID.fromString(fileId)).orElseThrow(() -> new NotFoundException("File not found"));
+    public void deleteClientFile(String encodedCookie, String encodedNamespace, String encodedFileId) {
+        ClientConnection clientConnection = processClientCookie(encodedCookie);
+        String fileId = cryptUtility.decryptSerpent(encodedFileId, clientConnection.getSession(), clientConnection.getIv());
+        String namespace = cryptUtility.decryptSerpent(encodedNamespace, clientConnection.getSession(), clientConnection.getIv());
+        FileEntity fileEntity = fileRepository.findByIdAndNamespace(UUID.fromString(fileId), namespace).orElseThrow(() -> new NotFoundException("File not found"));
         String contentPath = System.getenv(contentEnvVar);
-        File file = new File((contentPath + clientFilePath).replaceFirst(CLIENT_ID_REGEX, client.getId().toString()).replaceFirst(FILE_ID_REGEX, fileEntity.getId().toString()));
+        File file = new File((contentPath + clientFilePath)
+                .replaceFirst(CLIENT_ID_REGEX, clientConnection.getClient().getId().toString())
+                .replaceFirst(NAMESPACE_REGEX, namespace)
+                .replaceFirst(FILE_ID_REGEX, fileEntity.getId().toString()));
         Files.delete(file.toPath());
         fileRepository.deleteById(fileEntity.getId());
     }
 
     @SneakyThrows
     @Override
-    public void createNamespace(String encodedClientId, String encodedNamespace) {
-        Client client = getCurrentClient(encodedClientId);
-        if (encodedNamespace.equals("")) {
+    public void createNamespace(String clientId, String namespace) {
+        if (namespace.equals("")) {
             throw new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Namespace param must not be empty!");
         }
-        String folders = cryptUtility.decryptSerpent(encodedNamespace, client.getSession(), client.getIv());
-        if (folders.equals("")) {
-            throw new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Namespace param must not be empty!");
+        File newFolders = new File(System.getenv(contentEnvVar) + clientFilesFolder.replaceFirst(CLIENT_ID_REGEX, clientId + "/" + namespace));
+        if (!newFolders.exists()) {
+            Files.createDirectory(newFolders.toPath());
         }
-        File newFolders = new File(System.getenv(contentEnvVar) + clientFilesFolder.replaceFirst(CLIENT_ID_REGEX, client.getId().toString()) + folders);
-        Files.createDirectory(newFolders.toPath());
     }
 
-    private FileShortDto convertToShortDto(FileEntity fileEntity, Client client) {
+    private FileShortDto convertToShortDto(FileEntity fileEntity, ClientConnection clientConnection) {
         return FileShortDto.builder()
-                           .id(cryptUtility.encryptSerpent(fileEntity.getId().toString(), client.getSession(), client.getIv()))
-                           .filename(cryptUtility.encryptSerpent(fileEntity.getName(), client.getSession(), client.getIv()))
-                           .lastUpdate(cryptUtility.encryptSerpent(dtf.format(fileEntity.getUpdatedOn()), client.getSession(), client.getIv()))
+                           .id(cryptUtility.encryptSerpent(fileEntity.getId().toString(), clientConnection.getSession(), clientConnection.getIv()))
+                           .filename(cryptUtility.encryptSerpent(fileEntity.getName(), clientConnection.getSession(), clientConnection.getIv()))
+                           .lastUpdate(cryptUtility.encryptSerpent(dtf.format(fileEntity.getUpdatedOn()), clientConnection.getSession(), clientConnection.getIv()))
                            .build();
     }
 
-    private Client getCurrentClient(String encodedClientId) {
-        String clientId = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientId));
-        Client client = clientRepository.findById(UUID.fromString(clientId)).orElseThrow(() -> new UnauthorizedException(INVALID_CLIENT_ID.name()));
-        if (client.getDisabled()) {
-            throw new UnauthorizedException(INVALID_SESSION.name());
+    private ClientConnection processClientCookie(String encodedClientCookie) {
+        String clientCookie = cryptUtility.decodeBytesToStringRSA(Base64.decodeBase64(encodedClientCookie));
+        String[] cookieData = clientCookie.split(":");
+        if (cookieData.length != 2) {
+            throw new UnauthorizedException(INVALID_COOKIE.name());
         }
-        if (client.getSessionExpiresAt().isBefore(LocalDateTime.now())) {
+        if (!clientRepository.existsById(UUID.fromString(cookieData[0]))) {
+            throw new UnauthorizedException(INVALID_CLIENT_ID.name());
+        }
+        ClientConnection clientConnection = clientConnectionRepository.findById(UUID.fromString(cookieData[1]))
+                                                                      .orElseThrow(() -> new UnauthorizedException(UNKNOWN_CONNECTION.name()));
+        if (clientConnection.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new UnauthorizedException(SESSION_EXPIRED.name());
         }
-        return client;
+        return clientConnection;
     }
 
 }

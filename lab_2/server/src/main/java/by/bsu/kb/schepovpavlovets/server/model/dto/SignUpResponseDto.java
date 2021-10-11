@@ -7,7 +7,5 @@ import lombok.Data;
 @Data
 public class SignUpResponseDto {
     private String publicKey;
-    private String sessionKey;
     private String clientId;
-    private String iv;
 }

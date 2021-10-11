@@ -5,7 +5,9 @@ import lombok.Data;
 
 @Builder
 @Data
-public class SessionKeyDto {
+public class ClientConnectionDto {
+    private String connectionId;
     private String sessionKey;
     private String iv;
+    private String expiresAt;
 }

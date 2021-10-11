@@ -2,9 +2,10 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Files</title>
+    <title>Home</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
           integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="../../css/main.css">
 </head>
 <body>
 <div>
@@ -29,14 +30,32 @@
         </div>
     </nav>
 </div>
-<div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}">
-</div>
 <div class="container-fluid">
-    <h1 th:text="${file.getName() + ' (' + file.getLastUpdate() + ')'}"></h1>
-    <div class="form-group">
-        <label for="exampleFormControlTextarea1">File content</label>
-        <textarea class="form-control" id="exampleFormControlTextarea1" rows="10" readonly th:text="${file.getContent()}"></textarea>
-    </div>
+    <div th:if="${message != null}" class="alert alert-warning" role="alert" th:text="${message}"></div>
+    <form th:method="post" th:action="@{/servers}" th:object="${server}">
+        <div class="form-group">
+            <label for="name">Name</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="name" placeholder="Enter server name" th:field="*{name}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="name">IP</label>
+            <div class="col-sm-10">
+                <input type="text" aria-label="IP" class="form-control" required placeholder="Enter server IP"
+                       pattern="^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$" th:field="*{ip}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="name">Port</label>
+            <div class="col-sm-10">
+                <input type="text" aria-label="PORT" class="form-control" required pattern="^\d+$" minlength="4"
+                       placeholder="Enter server port"
+                       maxlength="5" value="8084" th:field="*{port}">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Create</button>
+    </form>
 </div>
 <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
         integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
