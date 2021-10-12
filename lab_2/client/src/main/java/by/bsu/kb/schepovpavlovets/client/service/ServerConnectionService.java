@@ -12,4 +12,7 @@ public interface ServerConnectionService {
 
     @Transactional
     ServerConnection getCurrentServerConnection();
+
+    @Transactional
+    String getServerConnectionStatus();
 }

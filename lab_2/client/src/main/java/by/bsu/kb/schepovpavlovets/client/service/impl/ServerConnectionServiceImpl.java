@@ -68,5 +68,13 @@ public class ServerConnectionServiceImpl implements ServerConnectionService {
                 new ConnectivityException("You are not connected to any server at the moment!"));
     }
 
+    @Transactional
+    @Override
+    public String getServerConnectionStatus() {
+        AppUserDetails userDetails = (AppUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        ServerConnection serverConnection = serverConnectionRepository.findByUserServerUserId(userDetails.getId()).orElse(null);
+        return serverConnection == null ? "Disconnected" : "Connected to " + serverConnection.getUserServer().getName();
+    }
+
 
 }

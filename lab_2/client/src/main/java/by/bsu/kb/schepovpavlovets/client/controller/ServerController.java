@@ -21,11 +21,13 @@ public class ServerController {
     @GetMapping
     public String index(Model model) {
         model.addAttribute("servers", userServerService.getUserServers());
+        model.addAttribute("connectionStatus", serverConnectionService.getServerConnectionStatus());
         return "servers/index";
     }
 
     @GetMapping("/create")
-    public String getCreatePage(@ModelAttribute("server") UserServerDto userServerDto) {
+    public String getCreatePage(@ModelAttribute("server") UserServerDto userServerDto, Model model) {
+        model.addAttribute("connectionStatus", serverConnectionService.getServerConnectionStatus());
         return "servers/create";
     }
 

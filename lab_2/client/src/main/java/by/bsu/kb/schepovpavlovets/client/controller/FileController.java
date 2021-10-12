@@ -4,6 +4,7 @@ import by.bsu.kb.schepovpavlovets.client.model.dto.FileDto;
 import by.bsu.kb.schepovpavlovets.client.model.dto.FileShortDto;
 import by.bsu.kb.schepovpavlovets.client.service.FileService;
 import by.bsu.kb.schepovpavlovets.client.service.IntegrationService;
+import by.bsu.kb.schepovpavlovets.client.service.ServerConnectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -17,11 +18,13 @@ import java.util.List;
 @RequestMapping("/files")
 public class FileController {
     private final FileService fileService;
+    private final ServerConnectionService serverConnectionService;
 
     @GetMapping
     public String index(Model model) {
         List<FileShortDto> fileShortDtos = fileService.getFiles();
         model.addAttribute("files", fileShortDtos);
+        model.addAttribute("connectionStatus", serverConnectionService.getServerConnectionStatus());
         return "files/index";
     }
 
@@ -29,11 +32,13 @@ public class FileController {
     public String one(@PathVariable String fileId, Model model) {
         FileDto fileDto = fileService.getFile(fileId);
         model.addAttribute("file", fileDto);
+        model.addAttribute("connectionStatus", serverConnectionService.getServerConnectionStatus());
         return "files/one";
     }
 
     @GetMapping("/create")
-    public String create() {
+    public String create(Model model) {
+        model.addAttribute("connectionStatus", serverConnectionService.getServerConnectionStatus());
         return "files/create";
     }
 
@@ -41,6 +46,7 @@ public class FileController {
     public String edit(@PathVariable String fileId, Model model) {
         FileDto fileDto = fileService.getFile(fileId);
         model.addAttribute("file", fileDto);
+        model.addAttribute("connectionStatus", serverConnectionService.getServerConnectionStatus());
         return "files/edit";
     }
 

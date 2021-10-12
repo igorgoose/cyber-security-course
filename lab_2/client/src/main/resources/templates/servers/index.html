@@ -27,6 +27,9 @@
                     <a class="btn btn-primary" th:href="@{/servers/create}">New Server</a>
                 </li>
             </ul>
+            <div class="form-inline my-2 my-lg-0">
+                <label class="form-control mr-sm-2" th:text="${connectionStatus}"></label>
+            </div>
             <form class="form-inline my-2 my-lg-0" th:method="post" th:action="@{/logout}">
                 <button class="btn btn-outline-primary my-2 mr-sm-2 my-sm-0" type="submit">Sign Out</button>
             </form>
