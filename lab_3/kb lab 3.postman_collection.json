@@ -1,0 +1,120 @@
+{
+	"info": {
+		"_postman_id": "2f031697-690c-4d52-b24c-bfdcadd66d3d",
+		"name": "kb lab 3",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "get config A",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/A/config",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"A",
+						"config"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get config B",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/B/config",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"B",
+						"config"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create config A",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/A/config",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"A",
+						"config"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "exchange keys",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/A/exchange",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"A",
+						"exchange"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "send signed message",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/A/send?message=hello",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"A",
+						"send"
+					],
+					"query": [
+						{
+							"key": "message",
+							"value": "hello"
+						},
+						{
+							"key": "brokenMessage",
+							"value": "hello broken",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
